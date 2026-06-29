@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+out/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+.wrangler/
+bun.lockb
+packages/desktop/bridle
+packages/desktop/bridle-*
+.dev.vars

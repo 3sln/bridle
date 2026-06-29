@@ -1,0 +1,31 @@
+name = "bridle"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom Domain on the existing 3sln.com Cloudflare zone. `custom_domain = true`
+# provisions the DNS record + edge certificate for this exact hostname and does
+# not affect sibling *.3sln.com apps. (Wrangler attaches it to whichever account
+# owns the zone — no zone_id needed here.)
+routes = [
+  { pattern = "bridle.3sln.com", custom_domain = true }
+]
+
+# Static PWA assets, with SPA fallback so client-routed deep links resolve.
+# Built by the PWA package into ../pwa/dist (path is resolved relative to this
+# config file, so it works regardless of the deploy CWD).
+[assets]
+directory = "../pwa/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Durable Object that hosts one signaling room per code. This is the only
+# stateful, Cloudflare-specific piece; everything routed into it is the
+# platform-neutral SignalingRoom. SQLite-backed so it runs on the free plan.
+[[durable_objects.bindings]]
+name = "SIGNAL_ROOMS"
+class_name = "BridleRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["BridleRoom"]

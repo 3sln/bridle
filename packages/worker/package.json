@@ -1,0 +1,21 @@
+{
+  "name": "@bridle/worker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Bridle backend: WebRTC signaling relay + PWA host. Kept thin and platform-agnostic.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:local": "bun src/dev-server.js",
+    "deploy": "wrangler deploy",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@bridle/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "license": "MIT",
+  "author": "Ray Stubbs"
+}

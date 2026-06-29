@@ -1,0 +1,80 @@
+// Install scripts served from bridle.3sln.com/install.sh and /install.ps1.
+// They download the right prebuilt single-file binary from GitHub Releases and
+// drop it on PATH. The binaries are produced by `bun build --compile --target`
+// in CI and uploaded as release assets named bridle-<os>-<arch>[.exe].
+
+const REPO = '3sln/tether';
+
+export const INSTALL_SH = `#!/bin/sh
+# bridle installer —  curl -fsSL https://bridle.3sln.com/install.sh | sh
+set -e
+REPO="${REPO}"
+BIN="bridle"
+
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+case "$arch" in
+  x86_64|amd64) arch="x64" ;;
+  arm64|aarch64) arch="arm64" ;;
+  *) echo "bridle: unsupported architecture: $arch" >&2; exit 1 ;;
+esac
+case "$os" in
+  darwin) os="darwin" ;;
+  linux) os="linux" ;;
+  *) echo "bridle: unsupported OS: $os (use install.ps1 on Windows)" >&2; exit 1 ;;
+esac
+
+asset="bridle-\${os}-\${arch}"
+url="https://github.com/\${REPO}/releases/latest/download/\${asset}"
+dest="\${BRIDLE_INSTALL:-$HOME/.local/bin}"
+mkdir -p "$dest"
+
+echo "bridle: downloading $asset…"
+if command -v curl >/dev/null 2>&1; then
+  curl -fSL "$url" -o "$dest/$BIN"
+else
+  wget -O "$dest/$BIN" "$url"
+fi
+chmod +x "$dest/$BIN"
+
+echo "bridle: installed to $dest/$BIN"
+case ":$PATH:" in
+  *":$dest:"*) ;;
+  *) echo "bridle: add $dest to your PATH, e.g.  export PATH=\\"$dest:\\$PATH\\"" ;;
+esac
+echo ""
+echo "next:  bridle -- claude        # pair, then it auto-daemonizes"
+echo "       bridle list             # see your tethers"
+`;
+
+export const INSTALL_PS1 = `# bridle installer —  irm https://bridle.3sln.com/install.ps1 | iex
+$ErrorActionPreference = 'Stop'
+$repo = '${REPO}'
+$arch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'arm64' }
+$asset = "bridle-windows-$arch.exe"
+$url = "https://github.com/$repo/releases/latest/download/$asset"
+$dest = Join-Path $env:LOCALAPPDATA 'Programs\\bridle'
+New-Item -ItemType Directory -Force -Path $dest | Out-Null
+$out = Join-Path $dest 'bridle.exe'
+
+Write-Host "bridle: downloading $asset…"
+Invoke-WebRequest -Uri $url -OutFile $out
+
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($userPath -notlike "*$dest*") {
+  [Environment]::SetEnvironmentVariable('Path', "$userPath;$dest", 'User')
+  Write-Host "bridle: added $dest to your PATH (restart your terminal)"
+}
+Write-Host "bridle: installed to $out"
+Write-Host ""
+Write-Host "next:  bridle -- claude        # pair, then it auto-daemonizes"
+Write-Host "       bridle list             # see your tethers"
+`;
+
+export const INSTALL_HELP = `bridle — install
+
+  macOS / Linux:   curl -fsSL https://bridle.3sln.com/install.sh | sh
+  Windows:         irm https://bridle.3sln.com/install.ps1 | iex
+
+Then:  bridle -- claude
+`;

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#0b0b0f"/>
+  <g fill="none" stroke="#7c5cff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <!-- stylized bridle: a loop with reins -->
+    <circle cx="256" cy="208" r="104"/>
+    <path d="M168 280 L120 400 M344 280 L392 400"/>
+    <path d="M210 150 q46 -40 92 0"/>
+  </g>
+  <circle cx="256" cy="208" r="20" fill="#7c5cff"/>
+</svg>

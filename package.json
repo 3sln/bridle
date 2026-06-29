@@ -1,0 +1,25 @@
+{
+  "name": "bridle",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Bridle — tether an AI agent CLI on your desktop to your phone over WebRTC, with voice and chat.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:pwa": "cd packages/pwa && npx vite",
+    "build:pwa": "cd packages/pwa && npx vite build",
+    "dev:worker": "cd packages/worker && npx wrangler dev",
+    "dev:signaling": "cd packages/worker && bun src/dev-server.js",
+    "deploy:worker": "cd packages/worker && npx wrangler deploy",
+    "build:desktop": "cd packages/desktop && bun build src/index.js --compile --external webview-bun --outfile bridle",
+    "desktop": "cd packages/desktop && bun run start",
+    "test": "bun test"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "license": "MIT",
+  "author": "Ray Stubbs"
+}

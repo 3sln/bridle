@@ -1,0 +1,120 @@
+:root {
+  --bg: #0b0b0f;
+  --bg-soft: #15151d;
+  --panel: #1b1b25;
+  --line: #2a2a38;
+  --text: #e8e8ef;
+  --muted: #9a9ab0;
+  --accent: #7c5cff;
+  --accent-dim: #4a3aa0;
+  --green: #34d399;
+  --red: #f87171;
+  --amber: #fbbf24;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+.app { height: 100dvh; display: flex; flex-direction: column; }
+.shell, .screen { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.screen { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+/* status bar */
+.status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+  font-size: 14px; color: var(--muted);
+}
+.status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.status .dot.tethered { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.status .dot.connecting, .status .dot.negotiating, .status .dot.reconnecting { background: var(--amber); }
+.status .dot.waiting { background: var(--accent); }
+.status .dot.error { background: var(--red); }
+.status .status-label { color: var(--text); }
+.status .agent { margin-left: auto; color: var(--accent); font-weight: 600; }
+.status .room { color: var(--muted); font-variant: tabular-nums; }
+.status .agent + .room { margin-left: 8px; }
+.status .room:only-of-type { margin-left: auto; }
+
+/* messages */
+.messages {
+  list-style: none; margin: 0; padding: 16px; flex: 1; min-height: 0;
+  overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+}
+.msg { display: flex; }
+.msg .bubble {
+  max-width: 82%; padding: 10px 14px; border-radius: 16px;
+  white-space: pre-wrap; word-break: break-word; font-size: 15px;
+}
+.msg.user { justify-content: flex-end; }
+.msg.user .bubble { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+.msg.assistant .bubble { background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.msg.system { justify-content: center; }
+.msg.system .bubble { background: transparent; color: var(--muted); font-size: 13px; padding: 2px 8px; }
+.msg.system.error .bubble { color: var(--red); }
+.msg.command .bubble { background: var(--accent-dim); }
+.msg .tag { align-self: flex-end; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 6px 4px 0; }
+
+/* mic meter */
+.meter { height: 4px; background: var(--bg-soft); margin: 0 16px; border-radius: 2px; overflow: hidden; opacity: .35; transition: opacity .2s; }
+.meter.listening { opacity: 1; }
+.meter-fill { height: 100%; width: 0; background: var(--accent); transition: width .08s linear; }
+.meter.speaking .meter-fill { background: var(--green); }
+.meter.processing { opacity: 1; }
+.meter.processing .meter-fill { width: 100% !important; background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .4; } }
+
+/* controls */
+.controls { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; background: var(--bg); }
+.composer { display: flex; gap: 8px; }
+.composer-input {
+  flex: 1; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--bg-soft); color: var(--text); font-size: 16px;
+}
+.composer-input:focus { outline: none; border-color: var(--accent); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  padding: 12px 16px; border-radius: 12px; font-size: 15px; font-weight: 600;
+  cursor: pointer; touch-action: manipulation; user-select: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .4; }
+.btn.big { flex: 1 1 100%; background: var(--accent-dim); border-color: transparent; }
+.btn.big.on { background: var(--red); }
+.btn.ptt { flex: 1 1 auto; background: var(--accent); border-color: transparent; }
+.btn.send { background: var(--accent); border-color: transparent; }
+.btn.muted { color: var(--muted); }
+.btn.quiet { background: var(--green); color: #04140d; border-color: transparent; }
+.btn.ghost { background: transparent; }
+.btn.icon { padding: 12px 14px; }
+
+/* hero */
+.hero { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 24px; text-align: center; }
+.hero-title { font-size: 28px; font-weight: 700; margin: 0; }
+.hint { color: var(--muted); font-size: 13px; }
+.hint code, code { background: var(--bg-soft); padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+
+/* banner */
+.banner { margin: 0 16px 8px; padding: 8px 12px; border-radius: 10px; font-size: 13px; }
+.banner.error { background: rgba(248,113,113,.15); color: var(--red); }
+
+/* settings sheet */
+.sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: flex-end; z-index: 10; }
+.sheet { width: 100%; background: var(--panel); border-radius: 20px 20px 0 0; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); max-height: 86dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; font-weight: 700; font-size: 18px; }
+.sheet .row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.sheet .row > span:first-child { flex: 1; }
+.sheet .row .val { color: var(--muted); font-variant: tabular-nums; min-width: 3ch; text-align: right; }
+.sheet input[type="range"] { flex: 1.4; accent-color: var(--accent); }
+.sheet input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
+.sheet select, .sheet .lead-in { background: var(--bg-soft); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 15px; }
+.sheet .hint { padding-top: 12px; }

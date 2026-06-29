@@ -1,0 +1,15 @@
+{
+  "name": "@bridle/protocol",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Shared, platform-agnostic wire protocol for bridle (signaling + P2P link).",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./signaling": "./signaling.js",
+    "./link": "./link.js",
+    "./ice": "./ice.js"
+  },
+  "license": "MIT",
+  "author": "Ray Stubbs"
+}

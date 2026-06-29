@@ -1,0 +1,26 @@
+{
+  "name": "@bridle/desktop",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "description": "Bridle desktop: spawns an AI agent CLI and tethers it to your phone over WebRTC, with Whisper STT.",
+  "bin": {
+    "bridle": "src/index.js"
+  },
+  "scripts": {
+    "start": "bun src/index.js",
+    "build": "bun build src/index.js --compile --external webview-bun --outfile bridle",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@3sln/ngin": "^0.0.3",
+    "@bridle/protocol": "workspace:*",
+    "werift": "^0.19.0",
+    "qrcode": "^1.5.4"
+  },
+  "optionalDependencies": {
+    "webview-bun": "^0.2.0"
+  },
+  "license": "MIT",
+  "author": "Ray Stubbs"
+}
