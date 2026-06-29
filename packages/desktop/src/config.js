@@ -18,7 +18,9 @@
 //   --no-daemon       Don't auto-install a service after the first tether
 //   --webview         Pop a native window with the pairing QR
 //   --no-turn         STUN only (skip the public TURN relay)
-//   --lang <code>     Hint Whisper at a language (e.g. en)
+//
+// STT runs in the browser (offline Whisper) and TTS uses the browser's speech
+// synthesis, so the desktop needs NO API keys.
 
 import { basename } from 'node:path';
 import { makeRoomCode } from '@bridle/protocol/signaling';
@@ -63,11 +65,6 @@ export function loadConfig(parsed = parseArgs(), env = process.env) {
     pwaUrl: `${backend}/#room=${room}`,
     agent: { command, cwd: process.cwd() },
     iceServers: turn ? DEFAULT_ICE_SERVERS : STUN_SERVERS,
-    whisper: {
-      apiKey: env.OPENAI_API_KEY || '',
-      model: env.BRIDLE_WHISPER_MODEL || 'whisper-1',
-      language: get('--lang') || env.BRIDLE_WHISPER_LANG || undefined,
-    },
     webview: has('--webview'),
     autoDaemon: !has('--no-daemon'),
     daemonMode: false,
@@ -84,11 +81,6 @@ export function configFromSetup(setup, env = process.env) {
     pwaUrl: `${backend}/#room=${setup.room}`,
     agent: { command: setup.agent || ['claude'], cwd: setup.cwd || process.cwd() },
     iceServers: DEFAULT_ICE_SERVERS,
-    whisper: {
-      apiKey: env.OPENAI_API_KEY || '',
-      model: env.BRIDLE_WHISPER_MODEL || 'whisper-1',
-      language: env.BRIDLE_WHISPER_LANG || undefined,
-    },
     webview: false,
     autoDaemon: false,
     daemonMode: true,

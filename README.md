@@ -4,13 +4,17 @@ Tether an AI agent CLI running on your **desktop** to your **phone** — over We
 with voice and chat. Talk to your agent from the couch; it runs where your code,
 keys, and tools already are.
 
-- **Desktop** spawns the agent CLI (default `claude`), holds your OpenAI key, runs
-  **Whisper** STT on inbound voice, and is a WebRTC peer.
-- **Phone** (an installable **PWA**) captures voice, streams it P2P to the desktop,
-  reads replies aloud with the browser's **TTS**, and has a hands-free
-  **conversation mode** with **voice commands**.
+- **Desktop** spawns the agent CLI (default `claude`) and is a WebRTC peer. It
+  pipes text in and streams output out — no API keys, no audio handling.
+- **Phone** (an installable **PWA**) captures voice, transcribes it **offline in
+  the browser** (Whisper via Transformers.js), reads replies aloud with the
+  browser's **TTS**, and has a hands-free **conversation mode** with **voice
+  commands**. Only text crosses the wire.
 - **Backend** (`bridle.3sln.com`) only does **signaling** + hosts the PWA. The
-  audio/chat hot path is **peer-to-peer**, so infra cost stays ~zero.
+  chat hot path is **peer-to-peer**, so infra cost stays ~zero.
+
+**No API keys anywhere** — STT runs on-device, TTS is the browser's, and the
+backend is just a relay.
 
 Built on the [3sln stack](https://github.com/3sln/stack): **ngin** (DI engine —
 providers/actions/queries), **dodo** (functional VDOM), **bones** (reactive glue).
@@ -29,7 +33,6 @@ irm https://bridle.3sln.com/install.ps1 | iex
 Then, in any project:
 
 ```sh
-export OPENAI_API_KEY=sk-...      # required for voice; chat works without it
 bridle -- claude                  # pair: scan the QR with your phone
 ```
 
@@ -48,19 +51,18 @@ bridle --webview -- claude        # also pop a native QR window
 
 ```
    phone (PWA)                 backend (bridle.3sln.com)          desktop (bridle)
- ┌───────────┐   WebSocket    ┌──────────────────────┐         ┌────────────────┐
- │ mic ──────┼── signaling ──▶│  signaling relay      │◀── signaling ──┤ werift peer │
- │ TTS ◀─────┤   (SDP/ICE)    │  + PWA static host    │         │  agent CLI     │
- └─────┬─────┘                └──────────────────────┘         │  Whisper STT   │
-       │                                                        └───────┬────────┘
-       └──────────────── WebRTC data channel (P2P) ────────────────────┘
-              voice (audio) ▶ STT ▶ agent stdin  ·  agent stdout ▶ TTS
+ ┌────────────────┐  WebSocket ┌──────────────────────┐         ┌────────────────┐
+ │ mic ▶ Whisper  ┼─ signaling▶│  signaling relay      │◀ signaling ┤ werift peer  │
+ │ (offline STT)  │  (SDP/ICE) │  + PWA static host    │         │  agent CLI     │
+ │ TTS ◀──────────┤            └──────────────────────┘         └───────┬────────┘
+ └───────┬────────┘                                                     │
+         └──────────────── WebRTC data channel (P2P, text only) ────────┘
+                 transcript ▶ agent stdin   ·   agent stdout ▶ TTS
 ```
 
-- **Voice in:** the phone records an utterance (VAD-segmented), ships the audio
-  over the data channel to the desktop, which runs Whisper. The transcript comes
-  back; the **phone** decides command vs. dictation and either acts locally or
-  sends the text to the agent.
+- **Voice in:** the phone records an utterance (VAD-segmented), transcribes it
+  **on-device** with Whisper, then decides command vs. dictation — acting locally
+  or sending the **text** to the agent. No audio leaves the phone.
 - **Voice out:** agent stdout streams to the phone, which speaks it with the
   browser's SpeechSynthesis, sentence by sentence (so "stop talking" cuts in).
 - **Voice commands** (say the lead-in word, default `bridle`): `pause` / `resume`,
@@ -121,8 +123,9 @@ vite dev server separately from the worker.
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.1 (desktop + tooling)
-- `OPENAI_API_KEY` for Whisper STT (chat works without it)
 - A modern mobile browser (Chrome/Safari) for the PWA — mic + SpeechSynthesis.
+- First voice use downloads a small Whisper model (~40 MB for `whisper-tiny.en`,
+  cached afterward; WebGPU is used when available, else WASM). No API keys.
 
 ## License
 

@@ -14,7 +14,6 @@ export function runSession(engine, config, { ui } = {}) {
     if (ui) {
       engine.feed.addEventListener('agent-output', (e) => ui.agentOutput(e.detail));
       engine.feed.addEventListener('guest-input', (e) => ui.guestInput(e.detail));
-      engine.feed.addEventListener('guest-transcript', (e) => ui.guestTranscript(e.detail));
     }
 
     const handle = engine.query(new SessionQuery());
@@ -54,16 +53,13 @@ async function daemonizeHandoff(engine, config, sub, ui) {
   sub.unsubscribe();
 
   const feed = engine.dispatch(
-    new InstallSetupAction(
-      {
-        name: config.name,
-        room: config.room,
-        agent: config.agent.command,
-        cwd: config.agent.cwd,
-        backendUrl: config.backendUrl,
-      },
-      { apiKey: config.whisper.apiKey, language: config.whisper.language },
-    ),
+    new InstallSetupAction({
+      name: config.name,
+      room: config.room,
+      agent: config.agent.command,
+      cwd: config.agent.cwd,
+      backendUrl: config.backendUrl,
+    }),
   );
 
   feed.addEventListener('installed', (e) => ui?.installed(e.detail));

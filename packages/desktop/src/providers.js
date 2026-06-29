@@ -10,7 +10,6 @@
 
 import { Provider } from '@3sln/ngin';
 import { AgentRunner } from './agent-runner.js';
-import { WhisperClient } from './whisper.js';
 import { SignalingClient } from './signaling-client.js';
 import { HostPeer } from './peer.js';
 import * as registry from './registry.js';
@@ -48,23 +47,6 @@ export class AgentProvider extends Provider {
   async dispose() {
     this.runner?.kill();
     this.runner = null;
-  }
-}
-
-/** Stateless STT client (key lives here, on the desktop). */
-export class WhisperProvider extends Provider {
-  static deps = ['config'];
-  constructor({ config }) {
-    super();
-    this.config = config;
-    this.client = null;
-  }
-  async obtain() {
-    if (!this.client) {
-      const cfg = await this.config.obtain();
-      this.client = new WhisperClient(cfg.whisper);
-    }
-    return this.client;
   }
 }
 

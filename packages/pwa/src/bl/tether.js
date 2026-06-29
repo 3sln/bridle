@@ -7,15 +7,7 @@
 // pattern: Actions stay thin verbs, the Query owns coordination.
 
 import { Query, Action } from '@3sln/ngin';
-import {
-  LINK,
-  COMMAND,
-  helloGuest,
-  text as mkText,
-  utterBegin,
-  utterEnd,
-  command as mkCommand,
-} from '@bridle/protocol/link';
+import { LINK, COMMAND, helloGuest, text as mkText, command as mkCommand } from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
 
@@ -28,7 +20,6 @@ export const CONNECTION = Object.freeze({
   ERROR: 'error',
 });
 
-const AUDIO_CHUNK = 16 * 1024;
 const SPEAK_FLUSH_MS = 800;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lastBoundary = (s) => {
@@ -37,15 +28,17 @@ const lastBoundary = (s) => {
 };
 
 export class TetherQuery extends Query {
-  static deps = ['config', 'settings', 'signaling', 'peer', 'mic', 'tts'];
+  static deps = ['config', 'settings', 'signaling', 'peer', 'mic', 'tts', 'stt'];
 
-  async boot({ config, settings, signaling, peer: makePeer, mic, tts }, { notify, engineFeed }) {
+  async boot({ config, settings, signaling, peer: makePeer, mic, tts, stt }, { notify, engineFeed }) {
     const state = {
       connection: CONNECTION.CONNECTING,
       conversation: false,
       listening: false,
       speaking: false,
-      processing: false, // utterance sent, awaiting transcript
+      processing: false, // transcribing an utterance on-device
+      sttState: 'idle', // idle | loading | ready | error
+      sttProgress: 0, // 0..100 during the one-time model download
       messages: [],
       level: 0,
       error: null,
@@ -68,7 +61,6 @@ export class TetherQuery extends Query {
     };
 
     let peer = null;
-    let utterSeq = 0;
     let speakBuffer = '';
     let flushTimer = null;
     let lastLevelNotify = 0;
@@ -130,18 +122,26 @@ export class TetherQuery extends Query {
         notifyNow();
       }
     });
-    mic.addEventListener('utterance', (e) => sendUtterance(e.detail));
+    mic.addEventListener('utterance', (e) => transcribeUtterance(e.detail));
 
-    async function sendUtterance({ blob, mime }) {
-      if (!peer) return;
-      const id = `${nonce}-u${++utterSeq}`;
-      peer.send(utterBegin(id, mime));
-      const u8 = new Uint8Array(await blob.arrayBuffer());
-      for (let o = 0; o < u8.length; o += AUDIO_CHUNK) {
-        peer.sendBinary(u8.slice(o, o + AUDIO_CHUNK));
-      }
-      peer.send(utterEnd(id));
+    // Offline STT model load progress -> UI (one-time download).
+    stt.addEventListener('progress', (e) => {
+      const d = e.detail || {};
+      const pct = typeof d.progress === 'number' ? Math.round(d.progress) : state.sttProgress;
+      push({ sttState: 'loading', sttProgress: pct });
+    });
+    stt.addEventListener('ready', () => push({ sttState: 'ready', sttProgress: 100 }));
+
+    // Transcribe locally, then decide: command (run here) or dictation (-> agent).
+    async function transcribeUtterance({ blob }) {
       push({ processing: true });
+      try {
+        const heard = await stt.transcribe(blob);
+        push({ processing: false, sttState: 'ready' });
+        onTranscript(heard);
+      } catch (err) {
+        push({ processing: false, sttState: 'error', error: `speech: ${err.message}` });
+      }
     }
 
     // --- connection / negotiation (guest = offerer) -------------------------
@@ -217,13 +217,6 @@ export class TetherQuery extends Query {
             addMessage('system', `agent exited (${msg.code ?? '?'})`, 'status');
           }
           break;
-        case LINK.TRANSCRIPT:
-          onTranscript(msg.text);
-          break;
-        case LINK.STT_ERROR:
-          push({ processing: false });
-          addMessage('system', `couldn't catch that: ${msg.message}`, 'error');
-          break;
         default:
           break;
       }
@@ -293,6 +286,7 @@ export class TetherQuery extends Query {
     // --- conversation + manual control --------------------------------------
     async function startConversation() {
       try {
+        stt.prewarm(); // download/init the model while the user speaks the first line
         await mic.start();
         push({ conversation: true, listening: true });
       } catch (err) {
@@ -347,6 +341,7 @@ export class TetherQuery extends Query {
           notifyNow();
           break;
         case 'manual-start':
+          stt.prewarm();
           mic.startManual().then(() => push({ listening: true })).catch((err) => push({ error: `mic: ${err.message}` }));
           break;
         case 'manual-stop':

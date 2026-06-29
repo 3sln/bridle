@@ -55,6 +55,7 @@ function view(state) {
     showHero ? hero(state) : messageList(state.messages),
     micMeter(state),
     controlBar(state),
+    state.sttState === 'loading' && div({ className: 'banner' }, `loading speech model… ${state.sttProgress || 0}%`),
     state.error && div({ className: 'banner error' }, state.error),
     state.sheetOpen && settingsSheet(state),
   );

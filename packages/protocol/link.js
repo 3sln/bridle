@@ -1,16 +1,16 @@
 // Link protocol — messages exchanged peer-to-peer over the WebRTC data channel
-// once the signaling handshake has connected the phone (guest) to the desktop
-// (host). This is "the reins" of bridle: the live tether between the two ends.
-// The backend is NOT involved here — this is the P2P hot path, which keeps
-// infra cost ~zero.
+// once signaling has connected the phone (guest) to the desktop (host). This is
+// "the reins" of bridle: the live tether between the two ends. The backend is
+// NOT involved — this is the P2P hot path, which keeps infra cost ~zero.
 //
-// Transport framing on the single ordered+reliable data channel:
-//   - string frames  -> JSON control/text messages (the kinds below)
-//   - binary frames  -> raw audio bytes for the currently-open utterance
+// STT runs on the phone (offline Whisper in the browser) and TTS uses the
+// browser's speech synthesis, so NO audio ever crosses this channel and the
+// desktop holds no API keys. Only text + control flow travels here:
 //
-// Only one utterance is "open" at a time per direction (guest dictates, host
-// transcribes), so binary frames need no envelope — they implicitly belong to
-// the utterance announced by the most recent UTTER_BEGIN.
+//   guest -> host : TEXT (transcribed or typed) and COMMAND (agent control)
+//   host  -> guest: OUTPUT (agent stdout) and STATUS (lifecycle)
+//
+// Every frame is a JSON string; there are no binary frames.
 
 export const PROTO_VERSION = 1;
 
@@ -22,16 +22,12 @@ export const LINK = Object.freeze({
   NOTICE: 'notice', // { t, level, text }
 
   // guest (phone) -> host (desktop)
-  TEXT: 'text', // { t, text }            chat line -> agent stdin
-  UTTER_BEGIN: 'utter-begin', // { t, id, mime }   start of a dictation utterance
-  UTTER_END: 'utter-end', // { t, id }         utterance complete -> run STT
+  TEXT: 'text', // { t, text }            transcribed/typed line -> agent stdin
   COMMAND: 'command', // { t, name, arg? }  control affecting the host
 
   // host (desktop) -> guest (phone)
   OUTPUT: 'output', // { t, text, stream }   agent stdout/stderr chunk
   STATUS: 'status', // { t, state, code? }   agent lifecycle
-  TRANSCRIPT: 'transcript', // { t, id, text }     STT result for an utterance
-  STT_ERROR: 'stt-error', // { t, id, message }
 });
 
 export const STREAM = Object.freeze({ STDOUT: 'stdout', STDERR: 'stderr' });
@@ -73,17 +69,12 @@ export const pong = (ts) => ({ t: LINK.PONG, ts });
 export const notice = (text, level = LEVEL.INFO) => ({ t: LINK.NOTICE, level, text });
 
 export const text = (s) => ({ t: LINK.TEXT, text: s });
-export const utterBegin = (id, mime) => ({ t: LINK.UTTER_BEGIN, id, mime });
-export const utterEnd = (id) => ({ t: LINK.UTTER_END, id });
 export const command = (name, arg) => ({ t: LINK.COMMAND, name, arg });
 
 export const output = (s, stream = STREAM.STDOUT) => ({ t: LINK.OUTPUT, text: s, stream });
 export const status = (state, code) => ({ t: LINK.STATUS, state, code });
-export const transcript = (id, s) => ({ t: LINK.TRANSCRIPT, id, text: s });
-export const sttError = (id, message) => ({ t: LINK.STT_ERROR, id, message });
 
 // ---- (de)serialization ------------------------------------------------------
-// Centralized so both ends agree on framing and bad frames fail loudly.
 
 export function encode(msg) {
   return JSON.stringify(msg);
@@ -91,7 +82,7 @@ export function encode(msg) {
 
 export function decode(raw) {
   if (typeof raw !== 'string') {
-    throw new TypeError('link.decode expects a string frame (binary frames are audio)');
+    throw new TypeError('link.decode expects a string frame');
   }
   const msg = JSON.parse(raw);
   if (!msg || typeof msg.t !== 'string') {

@@ -8,17 +8,15 @@
 // signaling socket persist across reconnects.
 //
 // Data flow once tethered (backend NOT involved):
-//   phone text   --link--> agent stdin
-//   phone audio  --link(binary)--> Whisper(STT) --link--> phone (transcript)
+//   phone text   --link--> agent stdin   (already transcribed on-device)
 //   agent stdout --link--> phone (TTS reads it)
 //   phone command--link--> agent control (interrupt / eof / restart / key)
 //
-// Command/dictation disambiguation lives on the PHONE: the host just transcribes
-// and returns text. That keeps UX logic (and user config) on the device and the
-// desktop dumb + fast.
+// STT/TTS and command/dictation disambiguation all live on the PHONE. The desktop
+// just pipes text in and streams output out — it holds no keys and stays fast.
 
 import { Query } from '@3sln/ngin';
-import { LINK, COMMAND, helloHost, output, status, transcript, sttError, pong } from '@bridle/protocol/link';
+import { LINK, COMMAND, helloHost, output, status, pong } from '@bridle/protocol/link';
 import { answer as mkAnswer } from '@bridle/protocol/signaling';
 
 export const PHASE = Object.freeze({
@@ -31,9 +29,9 @@ export const PHASE = Object.freeze({
 });
 
 export class SessionQuery extends Query {
-  static deps = ['config', 'agent', 'whisper', 'signaling', 'peer'];
+  static deps = ['config', 'agent', 'signaling', 'peer'];
 
-  async boot({ config, agent, whisper, signaling, peer: makePeer }, { notify, engineFeed }) {
+  async boot({ config, agent, signaling, peer: makePeer }, { notify, engineFeed }) {
     const echo = (type, detail) => engineFeed.dispatchEvent(new CustomEvent(type, { detail }));
 
     const state = {
@@ -51,7 +49,6 @@ export class SessionQuery extends Query {
     };
 
     let outBuffer = ''; // agent output produced before a channel is open
-    let currentUtter = null; // { id, mime, chunks: [] }
     let peer = null; // the live HostPeer for the current connection
     const baseCleanups = [];
     const peerCleanups = [];
@@ -102,9 +99,6 @@ export class SessionQuery extends Query {
         push({ phase: PHASE.TETHERED });
       });
       on('closed', () => push({ phase: PHASE.PEER_LEFT }));
-      on('binary', (e) => {
-        if (currentUtter) currentUtter.chunks.push(toBuffer(e.detail.chunk));
-      });
       on('message', (e) => handleLink(e.detail.msg));
     }
 
@@ -141,12 +135,6 @@ export class SessionQuery extends Query {
         case LINK.COMMAND:
           runCommand(msg.name, msg.arg);
           break;
-        case LINK.UTTER_BEGIN:
-          currentUtter = { id: msg.id, mime: msg.mime || 'audio/webm', chunks: [] };
-          break;
-        case LINK.UTTER_END:
-          await finishUtterance(msg.id);
-          break;
         case LINK.PING:
           peer?.send(pong(msg.ts));
           break;
@@ -165,21 +153,6 @@ export class SessionQuery extends Query {
       }
     }
 
-    async function finishUtterance(id) {
-      const utter = currentUtter;
-      currentUtter = null;
-      if (!utter || utter.id !== id || utter.chunks.length === 0) return;
-      const audio = Buffer.concat(utter.chunks);
-      try {
-        const text = await whisper.transcribe(audio, utter.mime);
-        peer?.send(transcript(id, text));
-        echo('guest-transcript', { id, text });
-      } catch (err) {
-        peer?.send(sttError(id, err.message));
-        push({ error: `STT: ${err.message}` });
-      }
-    }
-
     // Go.
     signaling.connect();
     notify({ ...state });
@@ -191,8 +164,4 @@ export class SessionQuery extends Query {
       agent.kill();
     };
   }
-}
-
-function toBuffer(chunk) {
-  return Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
 }

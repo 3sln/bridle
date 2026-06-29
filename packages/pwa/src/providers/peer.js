@@ -14,7 +14,6 @@ export class GuestPeer extends EventTarget {
     super();
     this.pc = new RTCPeerConnection(iceConfig({ iceServers }));
     this.channel = this.pc.createDataChannel('bridle', { ordered: true });
-    this.channel.binaryType = 'arraybuffer';
     this.#wire();
   }
 
@@ -73,18 +72,6 @@ export class GuestPeer extends EventTarget {
       return true;
     }
     return false;
-  }
-
-  sendBinary(buf) {
-    if (this.channel.readyState === 'open') {
-      this.channel.send(buf);
-      return true;
-    }
-    return false;
-  }
-
-  get bufferedAmount() {
-    return this.channel.bufferedAmount;
   }
 
   close() {

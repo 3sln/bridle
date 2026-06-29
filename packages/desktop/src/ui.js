@@ -22,9 +22,7 @@ export const ui = {
     console.log(`  room     ${c.bold(config.room)}`);
     console.log(`  agent    ${config.agent.command.join(' ')}`);
     console.log(`  daemon   ${config.autoDaemon ? `auto (${platformName()}) after first tether` : 'off (--no-daemon)'}`);
-    if (!config.whisper.apiKey) {
-      console.log(`  ${c.red('⚠ OPENAI_API_KEY not set — voice STT will fail; chat still works')}`);
-    }
+    console.log(c.dim('  voice    on-device (browser Whisper) — no API key needed'));
     console.log('');
   },
 
@@ -42,9 +40,6 @@ export const ui = {
   },
   guestInput({ text }) {
     console.log(`\n${c.cyan('📱 you:')} ${text}`);
-  },
-  guestTranscript({ text }) {
-    console.log(c.dim(`🎙  heard: ${text}`));
   },
   installed({ setup, service }) {
     console.log(c.green(`✓ installed daemon "${setup.name}" via ${service.manager}`));
@@ -87,9 +82,8 @@ ${c.bold('options')}
   --no-daemon       don't auto-install a service after first tether
   --webview         pop a native window with the pairing QR
   --no-turn         STUN only (skip public TURN)
-  --lang <code>     Whisper language hint (e.g. en)
 
-${c.dim('env: OPENAI_API_KEY (required for voice STT)')}`);
+${c.dim('voice STT runs on the phone (offline) — the desktop needs no API key')}`);
   },
 };
 
@@ -101,7 +95,6 @@ ui.quiet = {
   note: (msg) => console.log(`[bridle] ${msg}`),
   agentOutput: () => {},
   guestInput: () => {},
-  guestTranscript: () => {},
   installed: () => {},
   removed: () => {},
   handedOff: () => {},

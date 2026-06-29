@@ -10,6 +10,7 @@ import { SignalingProvider } from './providers/signaling.js';
 import { PeerProvider } from './providers/peer.js';
 import { MicProvider } from './providers/mic.js';
 import { TtsProvider } from './providers/tts.js';
+import { SttProvider } from './providers/stt.js';
 import app from './ui/compositions/app.js';
 
 const root = document.querySelector('.app');
@@ -26,6 +27,7 @@ if (!isValidRoomCode(config.room)) {
       peer: PeerProvider,
       mic: MicProvider,
       tts: TtsProvider,
+      stt: SttProvider,
     },
   });
   dd.reconcile(root, [app(engine)]);

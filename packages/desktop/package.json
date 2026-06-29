@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
-  "description": "Bridle desktop: spawns an AI agent CLI and tethers it to your phone over WebRTC, with Whisper STT.",
+  "description": "Bridle desktop: spawns an AI agent CLI and tethers it to your phone over WebRTC. No API keys.",
   "bin": {
     "bridle": "src/index.js"
   },

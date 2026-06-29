@@ -4,28 +4,17 @@
 
 import { Action, Query } from '@3sln/ngin';
 
-/** Persist a setup and register an OS service for it. */
+/** Persist a setup and register an OS service for it. No secrets to store —
+ *  STT/TTS run on the phone, so the daemon needs no API keys. */
 export class InstallSetupAction extends Action {
   static deps = ['registry', 'service'];
-  /**
-   * @param {{name,room,agent,cwd,backendUrl}} setup
-   * @param {{apiKey?:string, language?:string, createdAt?:string}} secrets
-   */
-  constructor(setup, secrets = {}) {
+  /** @param {{name,room,agent,cwd,backendUrl,createdAt?}} setup */
+  constructor(setup) {
     super();
     this.setup = setup;
-    this.secrets = secrets;
   }
   async execute({ registry, service }, { dispatchFeed }) {
-    const saved = await registry.saveSetup({
-      ...this.setup,
-      createdAt: this.setup.createdAt || this.secrets.createdAt || null,
-    });
-    // Stash secrets in a 0600 env file the service loads at runtime.
-    await registry.writeEnvFile(saved.name, {
-      OPENAI_API_KEY: this.secrets.apiKey || '',
-      BRIDLE_WHISPER_LANG: this.secrets.language || '',
-    });
+    const saved = await registry.saveSetup({ ...this.setup, createdAt: this.setup.createdAt || null });
     const svc = await service.installService(saved.name);
     dispatchFeed.dispatchEvent(new CustomEvent('installed', { detail: { setup: saved, service: svc } }));
   }

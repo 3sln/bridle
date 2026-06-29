@@ -9,7 +9,6 @@ import { Engine, Provider } from '@3sln/ngin';
 import { parseArgs, loadConfig, configFromSetup } from './config.js';
 import {
   AgentProvider,
-  WhisperProvider,
   SignalingProvider,
   PeerProvider,
   RegistryProvider,
@@ -28,7 +27,6 @@ function buildEngine(config) {
     providers: {
       config: Provider.fromSingleton(config),
       agent: AgentProvider,
-      whisper: WhisperProvider,
       signaling: SignalingProvider,
       peer: PeerProvider,
       registry: RegistryProvider,
@@ -123,10 +121,13 @@ async function cmdInstall() {
   const config = loadConfig(parsed);
   const engine = buildEngine(config);
   const feed = engine.dispatch(
-    new InstallSetupAction(
-      { name: config.name, room: config.room, agent: config.agent.command, cwd: config.agent.cwd, backendUrl: config.backendUrl },
-      { apiKey: config.whisper.apiKey, language: config.whisper.language },
-    ),
+    new InstallSetupAction({
+      name: config.name,
+      room: config.room,
+      agent: config.agent.command,
+      cwd: config.agent.cwd,
+      backendUrl: config.backendUrl,
+    }),
   );
   await new Promise((resolve, reject) => {
     feed.addEventListener('installed', (e) => ui.installed(e.detail));

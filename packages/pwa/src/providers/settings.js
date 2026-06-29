@@ -13,7 +13,8 @@ export const DEFAULTS = Object.freeze({
   vadThreshold: 0.012, // RMS gate for voice activity (0..1)
   vadHangoverMs: 900, // silence before an utterance is considered finished
   commandLeadIn: 'bridle', // optional wake word to force command interpretation
-  language: '', // Whisper/UI language hint ('' = auto)
+  language: '', // Whisper language hint ('' = auto; ignored by *.en models)
+  sttModel: 'Xenova/whisper-tiny.en', // offline Whisper model run in-browser
 });
 
 class Settings extends EventTarget {
