@@ -29,7 +29,11 @@ const engine = new Engine({
   },
 });
 
-dd.reconcile(root, [app(engine)]);
+// `app(engine)` returns a dodo component (an alias factory); call it to produce
+// the VNode that actually renders. Passing the factory itself would make dodo
+// stringify it as a text node — i.e. the whole app renders nothing.
+const App = app(engine);
+dd.reconcile(root, [App()]);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

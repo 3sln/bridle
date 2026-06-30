@@ -26,6 +26,7 @@ import {
   AddTetherAction,
   RemoveTetherAction,
 } from '../../bl/tether.js';
+import landing from '../components/landing.js';
 import statusBar from '../components/statusBar.js';
 import messageList from '../components/messageList.js';
 import micMeter from '../components/micMeter.js';
@@ -70,6 +71,17 @@ export default function app(engine) {
 
 function view(state) {
   if (!state) return div({ className: 'screen' }, p({ className: 'hint' }, 'starting…'));
+
+  // Fresh visitor — no saved tethers and not arriving from a QR. Show the full
+  // landing instead of the app chrome. The Tethers sheet still mounts so the
+  // "Add a tether" button works; adding one flips us into the app view.
+  if (state.connection === 'no-tether' && state.tethers.length === 0) {
+    return div({ className: 'screen' },
+      landing(state),
+      state.toast && div({ className: `banner ${state.toast.level || 'info'}` }, state.toast.text),
+      state.tethersOpen && tethersSheet(state),
+    );
+  }
 
   const showHero = state.connection !== 'tethered' && state.messages.length === 0;
 

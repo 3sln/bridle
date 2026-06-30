@@ -153,3 +153,28 @@ body {
 .session .remove { margin-left: auto; padding: 6px 10px; }
 .status .tether-chip { cursor: pointer; }
 .session-list + .composer { margin-top: 10px; }
+
+/* landing (first-run / fresh visitor) */
+.landing { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.lp { max-width: 640px; margin: 0 auto; padding: 32px 20px calc(40px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 18px; }
+.lp-hero { text-align: center; display: flex; flex-direction: column; gap: 10px; padding: 12px 0 6px; }
+.lp-logo { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: .01em; }
+.lp-tagline { font-size: clamp(24px, 6vw, 34px); line-height: 1.15; font-weight: 800; margin: 0; }
+.lp-sub { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0; }
+.lp-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+.lp-card h2 { font-size: 16px; margin: 0; }
+.lp-muted { color: var(--muted); font-size: 13px; margin: 0; }
+.lp-small { font-size: 12px; }
+.lp-cmd { display: flex; align-items: stretch; gap: 8px; background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 8px 12px; }
+.lp-cmd-text { flex: 1; background: transparent; padding: 6px 0; font-size: 13px; line-height: 1.4; overflow-x: auto; white-space: nowrap; align-self: center; }
+.lp-copy { flex: none; padding: 8px 12px; font-size: 13px; }
+.lp-details summary { color: var(--accent); font-size: 13px; cursor: pointer; padding: 2px 0; }
+.lp-details .lp-cmd { margin-top: 8px; }
+.lp-steps, .lp-feats { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.45; }
+.lp-feats { list-style: none; padding-left: 0; }
+.lp-feats strong { color: var(--text); }
+.lp-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.lp-btn { text-decoration: none; }
+.lp-foot { text-align: center; color: var(--muted); font-size: 13px; display: flex; justify-content: center; align-items: center; gap: 8px; padding-top: 4px; }
+.lp-foot a { color: var(--accent); text-decoration: none; }
+.lp-foot .lp-dot { opacity: .6; }
