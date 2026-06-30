@@ -155,9 +155,11 @@ Bridle is built for eyes-off use — talking to your agent while driving:
 
 - **Driving mode** (one toggle): auto-starts conversation on connect, keeps the
   screen awake, and enables audio cues.
-- **Car / headset / lock-screen controls** (MediaSession): play→listen,
-  pause→pause listening, stop→stop talking, ⏮→repeat, ⏭→interrupt. Steering-wheel
-  buttons just work.
+- **Car / headset / lock-screen controls** (MediaSession): play/pause &
+  togglemicrophone→listen/pause, stop→stop talking, ⏮→repeat, ⏭→interrupt,
+  ⏪/⏩→slower/faster speech, hangup→end. Steering-wheel buttons just work, and a
+  silent keepalive holds the session so they fire even while only listening. The
+  lock-screen "now playing" card shows the active tether/agent/session.
 - **Earcons**: short tones for listening / thinking / answer-ready / error, so you
   know the state without looking.
 - **Wake Lock** keeps the session alive; **barge-in** ("stop talking") cuts the
