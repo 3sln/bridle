@@ -3,7 +3,7 @@
 // drop it on PATH. The binaries are produced by `bun build --compile --target`
 // in CI and uploaded as release assets named bridle-<os>-<arch>[.exe].
 
-const REPO = '3sln/tether';
+const REPO = '3sln/bridal';
 
 export const INSTALL_SH = `#!/bin/sh
 # bridle installer —  curl -fsSL https://bridle.3sln.com/install.sh | sh
