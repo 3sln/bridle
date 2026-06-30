@@ -275,6 +275,23 @@ bridle --local -- claude       # point the desktop at localhost:8787
 Open the PWA with `?backend=http://<your-lan-ip>:8787#room=<code>` when running the
 vite dev server separately from the worker.
 
+## Testing
+
+```sh
+bun test            # logic + node WebRTC E2E (signaling + werift host + data channel)
+bun run test:browser   # real-browser render + browser WebRTC E2E (Chromium via @web/test-runner)
+```
+
+`bun test` covers the protocol, the TURN budget governor, a happy-dom render
+smoke test, and an **end-to-end tether over local WebRTC** — the real
+`SignalingRoom` relays a real offer/answer between the desktop `HostPeer`
+(werift) and a guest until a data channel opens and link frames round-trip, all
+over loopback host candidates (no STUN/TURN, runs offline in CI).
+
+`test:browser` mounts the app in real Chromium (asserting it renders and reacts
+to state — the regression that once made the whole app render nothing), and runs
+the browser half of the WebRTC E2E with the production `GuestPeer`.
+
 ## Requirements
 
 - [Bun](https://bun.sh) ≥ 1.1 (desktop + tooling)

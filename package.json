@@ -15,7 +15,8 @@
     "deploy:worker": "cd packages/worker && npx wrangler deploy",
     "build:desktop": "cd packages/desktop && bun build src/index.js --compile --external webview-bun --outfile bridle",
     "desktop": "cd packages/desktop && bun run start",
-    "test": "bun test"
+    "test": "bun test",
+    "test:browser": "cd packages/pwa && bun run test:browser"
   },
   "engines": {
     "bun": ">=1.1.0"
