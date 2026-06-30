@@ -33,7 +33,9 @@ irm https://bridle.3sln.com/install.ps1 | iex
 Then, in any project:
 
 ```sh
-bridle -- claude                  # pair: scan the QR with your phone
+bridle                  # pair (default agent: claude); scan the QR with your phone
+bridle codex            # or pick another agent
+bridle -- <cmd…>        # or run any other CLI in generic pipe mode
 ```
 
 Scan the QR (or open the printed URL). The first time you tether, bridle
@@ -68,6 +70,36 @@ bridle --webview -- claude        # also pop a native QR window
 - **Voice commands** (say the lead-in word, default `bridle`): `pause` / `resume`,
   `stop conversation`, `repeat`, `interrupt`, `faster` / `slower`, `clear`.
   `stop talking` / `be quiet` work without the lead-in for instant barge-in.
+
+## Agents it drives
+
+Bridle invokes each agent in its **headless** mode (prompt in → text out), not its
+interactive TUI — so there's no PTY or ANSI to read aloud, and replies stream
+cleanly to TTS. Pick one with `bridle <agent>` (default `claude`):
+
+| Tier | Agents | How |
+| --- | --- | --- |
+| **Enhanced** (tuned + session continuity) | `claude`, `codex`, `antigravity` (`agy`), `gemini`, `opencode`, `aider`, `goose`, `cursor` | each tool's headless flag (`claude -p`, `codex exec`, `agy -p`, …) with explicit session IDs threaded through every turn |
+| **Best-effort** | `q` (Amazon Q), `copilot` | headless flags that may shift between releases |
+| **Baseline** (any CLI) | `bridle -- <cmd…>` | generic persistent pipe: your text → stdin, stdout → phone |
+
+Adding a tuned agent is a one-line profile in `packages/desktop/src/agents.js`, not
+a code change — the runner and everything downstream are agent-agnostic.
+
+## Sessions
+
+Bridle threads an explicit **session ID** through every call, so multi-turn voice
+conversations keep context (for Claude it even owns the UUID: `--session-id` then
+`--resume`). When you connect, it **attaches to the latest session you already had
+going in that project** — so you can start in your terminal and pick it up by
+voice — and **injects a one-time primer** telling the agent it's now speaking to a
+voice client (be concise, no code dumps, read commands clearly), which the agent
+acknowledges out loud.
+
+Switch sessions hands-free: say **"bridle sessions"** to hear/see the list, then
+**"bridle session 2"** (or tap one), or **"bridle new session"** to start fresh.
+Sessions are read from each tool's own store (`~/.claude/projects/…`,
+`~/.codex/sessions/…`).
 
 ## Repo layout
 

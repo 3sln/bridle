@@ -26,3 +26,14 @@ test('unknown command after lead-in is reported', () => {
   const r = parse('bridle do a barrel roll', { leadIn: 'bridle' });
   expect(r.name).toBe('unknown');
 });
+
+test('session commands', () => {
+  expect(parse('bridle sessions', { leadIn: 'bridle' })).toEqual({ name: CMD.SESSIONS });
+  expect(parse('bridle new session', { leadIn: 'bridle' })).toEqual({ name: CMD.NEW_SESSION });
+});
+
+test('connect to a session by number or ordinal', () => {
+  expect(parse('bridle connect to session 2', { leadIn: 'bridle' })).toEqual({ name: CMD.CONNECT_SESSION, index: 2 });
+  expect(parse('bridle session two', { leadIn: 'bridle' })).toEqual({ name: CMD.CONNECT_SESSION, index: 2 });
+  expect(parse('bridle open session number 3', { leadIn: 'bridle' })).toEqual({ name: CMD.CONNECT_SESSION, index: 3 });
+});

@@ -16,7 +16,16 @@
 // just pipes text in and streams output out — it holds no keys and stays fast.
 
 import { Query } from '@3sln/ngin';
-import { LINK, COMMAND, helloHost, output, status, pong } from '@bridle/protocol/link';
+import {
+  LINK,
+  COMMAND,
+  helloHost,
+  output,
+  status,
+  pong,
+  sessions as mkSessions,
+  session as mkSession,
+} from '@bridle/protocol/link';
 import { answer as mkAnswer } from '@bridle/protocol/signaling';
 
 export const PHASE = Object.freeze({
@@ -50,6 +59,8 @@ export class SessionQuery extends Query {
 
     let outBuffer = ''; // agent output produced before a channel is open
     let peer = null; // the live HostPeer for the current connection
+    let currentSessionId = null;
+    const sessionTitles = new Map();
     const baseCleanups = [];
     const peerCleanups = [];
     const onBase = (target, type, fn) => {
@@ -69,6 +80,26 @@ export class SessionQuery extends Query {
       push({ agentState: 'exited' });
       peer?.send(status('exited', e.detail.code));
     });
+    // Active session changed (created/attached) -> tell the phone.
+    onBase(agent, 'session', (e) => {
+      currentSessionId = e.detail.id;
+      const title = sessionTitles.get(e.detail.id) || shortId(e.detail.id);
+      peer?.send(mkSession(e.detail.id, title, e.detail.resumed));
+    });
+
+    // Attach to (or create) an agent session for this connection and prime it.
+    async function attachSession(resumeId) {
+      let id = resumeId;
+      if (id === undefined) {
+        if (config.session.id) id = config.session.id;
+        else if (config.session.attachLatest) {
+          const list = await agent.listSessions();
+          list.forEach((s) => sessionTitles.set(s.id, s.title));
+          id = list[0]?.id;
+        }
+      }
+      agent.beginSession({ resumeId: id || undefined });
+    }
 
     // --- per-connection peer ------------------------------------------------
     function teardownPeer() {
@@ -91,12 +122,14 @@ export class SessionQuery extends Query {
       };
       on('state', (e) => push({ ice: e.detail.state }));
       on('open', () => {
-        peer.send(helloHost(config.agent.command.join(' '), config.agent.cwd));
+        peer.send(helloHost(config.agent.label, config.agent.cwd));
         if (outBuffer) {
           peer.send(output(outBuffer));
           outBuffer = '';
         }
         push({ phase: PHASE.TETHERED });
+        // Default: resume the latest session they had going; inject the primer.
+        attachSession(undefined);
       });
       on('closed', () => push({ phase: PHASE.PEER_LEFT }));
       on('message', (e) => handleLink(e.detail.msg));
@@ -135,6 +168,15 @@ export class SessionQuery extends Query {
         case LINK.COMMAND:
           runCommand(msg.name, msg.arg);
           break;
+        case LINK.LIST_SESSIONS: {
+          const list = await agent.listSessions();
+          list.forEach((s) => sessionTitles.set(s.id, s.title));
+          peer?.send(mkSessions(list, currentSessionId));
+          break;
+        }
+        case LINK.CONNECT_SESSION:
+          attachSession(msg.id || undefined);
+          break;
         case LINK.PING:
           peer?.send(pong(msg.ts));
           break;
@@ -165,3 +207,5 @@ export class SessionQuery extends Query {
     };
   }
 }
+
+const shortId = (id) => (id ? `session ${String(id).slice(0, 8)}` : 'new session');

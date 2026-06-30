@@ -15,12 +15,17 @@ import {
   OpenSettingsAction,
   CloseSettingsAction,
   SetSettingAction,
+  ListSessionsAction,
+  ConnectSessionAction,
+  NewSessionAction,
+  CloseSessionsAction,
 } from '../../bl/tether.js';
 import statusBar from '../components/statusBar.js';
 import messageList from '../components/messageList.js';
 import micMeter from '../components/micMeter.js';
 import controlBar from '../components/controlBar.js';
 import settingsSheet from '../components/settingsSheet.js';
+import sessionsSheet from '../components/sessionsSheet.js';
 
 const { alias, div, p, strong } = dd;
 
@@ -40,6 +45,10 @@ export default function app(engine) {
     'open-settings': () => go(new OpenSettingsAction()),
     close: () => go(new CloseSettingsAction()),
     set: (e) => go(new SetSettingAction(e.detail.key, e.detail.value)),
+    'open-sessions': () => go(new ListSessionsAction()),
+    'connect-session': (e) => go(new ConnectSessionAction(e.detail.id)),
+    'new-session': () => go(new NewSessionAction()),
+    'close-sessions': () => go(new CloseSessionsAction()),
   };
 
   return alias(() => div({ className: 'shell' }, watch(tether$, view)).on(handlers));
@@ -58,6 +67,7 @@ function view(state) {
     state.sttState === 'loading' && div({ className: 'banner' }, `loading speech model… ${state.sttProgress || 0}%`),
     state.error && div({ className: 'banner error' }, state.error),
     state.sheetOpen && settingsSheet(state),
+    state.sessionsOpen && sessionsSheet(state),
   );
 }
 

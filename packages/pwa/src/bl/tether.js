@@ -7,7 +7,15 @@
 // pattern: Actions stay thin verbs, the Query owns coordination.
 
 import { Query, Action } from '@3sln/ngin';
-import { LINK, COMMAND, helloGuest, text as mkText, command as mkCommand } from '@bridle/protocol/link';
+import {
+  LINK,
+  COMMAND,
+  helloGuest,
+  text as mkText,
+  command as mkCommand,
+  listSessions as mkListSessions,
+  connectSession as mkConnectSession,
+} from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
 
@@ -49,6 +57,9 @@ export class TetherQuery extends Query {
       voices: tts.voices().map((v) => v.name),
       settings: settings.all(),
       sheetOpen: false,
+      sessions: [], // resumable agent sessions (when listed)
+      currentSession: null, // { id, title }
+      sessionsOpen: false,
     };
     const refreshSettings = () => {
       state.settings = settings.all();
@@ -217,10 +228,20 @@ export class TetherQuery extends Query {
             addMessage('system', `agent exited (${msg.code ?? '?'})`, 'status');
           }
           break;
+        case LINK.SESSIONS:
+          push({ sessions: msg.sessions || [], currentSession: findSession(msg.sessions, msg.currentId), sessionsOpen: true });
+          break;
+        case LINK.SESSION:
+          markAssistantDone();
+          push({ currentSession: { id: msg.id, title: msg.title }, sessionsOpen: false });
+          addMessage('system', msg.resumed ? `resumed ${msg.title}` : 'new session', 'status');
+          break;
         default:
           break;
       }
     }
+
+    const findSession = (list, id) => (list || []).find((s) => s.id === id) || (id ? { id, title: 'current' } : null);
 
     // The phone decides: command or dictation.
     function onTranscript(heard) {
@@ -278,6 +299,21 @@ export class TetherQuery extends Query {
           state.messages = [];
           notifyNow();
           break;
+        case CMD.SESSIONS:
+          peer?.send(mkListSessions());
+          break;
+        case CMD.NEW_SESSION:
+          peer?.send(mkConnectSession(null));
+          break;
+        case CMD.CONNECT_SESSION: {
+          const target = state.sessions[(cmd.index || 1) - 1];
+          if (target) peer?.send(mkConnectSession(target.id));
+          else {
+            peer?.send(mkListSessions());
+            addMessage('system', `say "${settings.get('commandLeadIn')} sessions" first to see the list`, 'status');
+          }
+          break;
+        }
         default:
           addMessage('system', `unknown command${cmd.rest ? `: ${cmd.rest}` : ''}`, 'error');
       }
@@ -355,6 +391,15 @@ export class TetherQuery extends Query {
         case 'set-sheet':
           push({ sheetOpen: !!it.open });
           break;
+        case 'list-sessions':
+          peer?.send(mkListSessions());
+          break;
+        case 'connect-session':
+          peer?.send(mkConnectSession(it.id || null));
+          break;
+        case 'set-sessions-sheet':
+          push({ sessionsOpen: !!it.open });
+          break;
         default:
           break;
       }
@@ -426,6 +471,26 @@ export class OpenSettingsAction extends IntentOnly {
 }
 export class CloseSettingsAction extends IntentOnly {
   intent = { type: 'set-sheet', open: false };
+}
+export class ListSessionsAction extends IntentOnly {
+  intent = { type: 'list-sessions' };
+}
+export class NewSessionAction extends Action {
+  execute(_, { engineFeed }) {
+    emit(engineFeed, { type: 'connect-session', id: null });
+  }
+}
+export class ConnectSessionAction extends Action {
+  constructor(id) {
+    super();
+    this.id = id;
+  }
+  execute(_, { engineFeed }) {
+    emit(engineFeed, { type: 'connect-session', id: this.id });
+  }
+}
+export class CloseSessionsAction extends IntentOnly {
+  intent = { type: 'set-sessions-sheet', open: false };
 }
 
 export class SetSettingAction extends Action {

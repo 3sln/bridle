@@ -56,7 +56,7 @@ async function daemonizeHandoff(engine, config, sub, ui) {
     new InstallSetupAction({
       name: config.name,
       room: config.room,
-      agent: config.agent.command,
+      agent: { id: config.agent.id, command: config.agent.command },
       cwd: config.agent.cwd,
       backendUrl: config.backendUrl,
     }),

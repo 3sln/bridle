@@ -18,6 +18,9 @@ export const CMD = Object.freeze({
   FASTER: 'faster',
   SLOWER: 'slower',
   CLEAR: 'clear',
+  SESSIONS: 'sessions',
+  NEW_SESSION: 'new-session',
+  CONNECT_SESSION: 'connect-session', // carries { index }
 });
 
 // phrase -> command. Longest/most-specific phrases should be matched first.
@@ -31,8 +34,25 @@ const PHRASES = [
   [CMD.INTERRUPT_AGENT, ['interrupt', 'cancel that', 'cancel', 'abort', 'stop the agent']],
   [CMD.FASTER, ['speak faster', 'talk faster', 'faster']],
   [CMD.SLOWER, ['speak slower', 'talk slower', 'slower']],
+  [CMD.NEW_SESSION, ['new session', 'fresh session', 'new conversation', 'start over']],
+  [CMD.SESSIONS, ['sessions', 'list sessions', 'show sessions', 'switch session', 'other sessions', 'my sessions']],
   [CMD.CLEAR, ['clear chat', 'clear', 'scratch that']],
 ];
+
+const ORDINALS = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5,
+};
+
+// "connect to session 2", "open session two", "resume session number 3"
+function matchConnect(text) {
+  const m = text.match(
+    /^(?:connect(?: to)?|open|switch to|resume|load|go to)?\s*session\s+(?:number\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth)$/,
+  );
+  if (!m) return null;
+  const n = /^\d+$/.test(m[1]) ? parseInt(m[1], 10) : ORDINALS[m[1]];
+  return n ? { name: CMD.CONNECT_SESSION, index: n } : null;
+}
 
 // Recognized even without the lead-in so the user can always cut in mid-reply.
 // Kept to barge-in only — "pause" etc. require the lead-in so normal dictation
@@ -63,7 +83,7 @@ export function parse(transcript, { leadIn = 'bridle' } = {}) {
   if (lead && (text === lead || text.startsWith(lead + ' '))) {
     // Explicit command: everything after the lead-in.
     const rest = text.slice(lead.length).trim();
-    return matchPhrase(rest) || { name: 'unknown', rest };
+    return matchConnect(rest) || matchPhrase(rest) || { name: 'unknown', rest };
   }
 
   // No lead-in: only the always-on safety commands are honored, and only when

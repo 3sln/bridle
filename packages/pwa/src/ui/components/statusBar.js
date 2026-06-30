@@ -17,6 +17,7 @@ export default alias((state) =>
     span({ className: `dot ${state.connection}` }),
     span({ className: 'status-label' }, LABELS[state.connection] || state.connection),
     state.agent && span({ className: 'agent' }, state.agent),
+    state.currentSession && span({ className: 'session', title: state.currentSession.id || '' }, state.currentSession.title || ''),
     span({ className: 'room' }, `#${state.room}`),
   ),
 );

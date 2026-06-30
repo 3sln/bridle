@@ -40,7 +40,7 @@ export class AgentProvider extends Provider {
   async obtain() {
     if (!this.runner) {
       const cfg = await this.config.obtain();
-      this.runner = new AgentRunner(cfg.agent.command, { cwd: cfg.agent.cwd });
+      this.runner = new AgentRunner(cfg.agent, { cwd: cfg.agent.cwd });
     }
     return this.runner;
   }

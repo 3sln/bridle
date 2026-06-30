@@ -24,10 +24,14 @@ export const LINK = Object.freeze({
   // guest (phone) -> host (desktop)
   TEXT: 'text', // { t, text }            transcribed/typed line -> agent stdin
   COMMAND: 'command', // { t, name, arg? }  control affecting the host
+  LIST_SESSIONS: 'list-sessions', // { t }          request the agent's sessions
+  CONNECT_SESSION: 'connect-session', // { t, id }  attach (id) or start fresh (null)
 
   // host (desktop) -> guest (phone)
   OUTPUT: 'output', // { t, text, stream }   agent stdout/stderr chunk
   STATUS: 'status', // { t, state, code? }   agent lifecycle
+  SESSIONS: 'sessions', // { t, sessions, currentId }  list of resumable sessions
+  SESSION: 'session', // { t, id, title, resumed }     active session changed
 });
 
 export const STREAM = Object.freeze({ STDOUT: 'stdout', STDERR: 'stderr' });
@@ -70,9 +74,13 @@ export const notice = (text, level = LEVEL.INFO) => ({ t: LINK.NOTICE, level, te
 
 export const text = (s) => ({ t: LINK.TEXT, text: s });
 export const command = (name, arg) => ({ t: LINK.COMMAND, name, arg });
+export const listSessions = () => ({ t: LINK.LIST_SESSIONS });
+export const connectSession = (id) => ({ t: LINK.CONNECT_SESSION, id: id || null });
 
 export const output = (s, stream = STREAM.STDOUT) => ({ t: LINK.OUTPUT, text: s, stream });
 export const status = (state, code) => ({ t: LINK.STATUS, state, code });
+export const sessions = (list, currentId) => ({ t: LINK.SESSIONS, sessions: list, currentId });
+export const session = (id, title, resumed) => ({ t: LINK.SESSION, id, title, resumed });
 
 // ---- (de)serialization ------------------------------------------------------
 

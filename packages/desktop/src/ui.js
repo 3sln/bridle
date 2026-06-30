@@ -3,6 +3,9 @@
 
 import { PHASE } from './bl/session.js';
 import { platformName } from './service.js';
+import { listProfiles } from './agents.js';
+
+const agentLabel = (a) => (!a ? '?' : a.id === 'custom' || !a.id ? (a.command || []).join(' ') : a.id);
 
 const c = {
   dim: (s) => `\x1b[2m${s}\x1b[0m`,
@@ -20,7 +23,8 @@ export const ui = {
     console.log(await terminalQR(config.pwaUrl));
     console.log(`  scan ↑   or open  ${c.ul(config.pwaUrl)}`);
     console.log(`  room     ${c.bold(config.room)}`);
-    console.log(`  agent    ${config.agent.command.join(' ')}`);
+    console.log(`  agent    ${config.agent.label} ${c.dim(`(${config.agent.mode}, ${config.agent.tier})`)}`);
+    console.log(c.dim(`  session  ${config.session.fresh ? 'new' : config.session.id || 'resume latest'} — primed for voice on connect`));
     console.log(`  daemon   ${config.autoDaemon ? `auto (${platformName()}) after first tether` : 'off (--no-daemon)'}`);
     console.log(c.dim('  voice    on-device (browser Whisper) — no API key needed'));
     console.log('');
@@ -60,7 +64,7 @@ export const ui = {
     console.log(c.bold('\n  setups\n'));
     for (const s of list) {
       const dot = s.status === 'active' ? c.green('●') : c.dim('○');
-      console.log(`  ${dot} ${c.bold(s.name.padEnd(16))} ${c.dim(s.status.padEnd(9))} room ${s.room}  ${c.dim(s.agent.join(' '))}`);
+      console.log(`  ${dot} ${c.bold(s.name.padEnd(16))} ${c.dim(s.status.padEnd(9))} room ${s.room}  ${c.dim(agentLabel(s.agent))}`);
     }
     console.log('');
   },
@@ -68,13 +72,20 @@ export const ui = {
     console.log(`${c.bold('bridle')} — tether an AI agent CLI to your phone
 
 ${c.bold('usage')}
-  bridle [options] [-- <agent cmd...>]   pair + run (auto-daemonizes on first tether)
-  bridle install [options] [-- <cmd...>] install a setup without pairing first
+  bridle [agent] [options]               pair + run (auto-daemonizes on first tether)
+  bridle [options] -- <raw cmd...>       run any other CLI in generic pipe mode
+  bridle install [agent] [options]       install a setup without pairing first
   bridle list                            list daemonized setups + status
   bridle remove <name>                   stop + remove a setup
   bridle daemon --setup <name>           headless run (used by the service)
 
+${c.bold('agents')}  ${listProfiles().map((p) => p.aliases[0]).join('  ')}
+  ${c.dim('default: claude. unknown commands run in generic pipe mode via `--`.')}
+
 ${c.bold('options')}
+  --agent <id>      select an agent profile explicitly
+  --session <id>    attach to a specific agent session
+  --new-session     start fresh instead of resuming the latest session
   --backend <url>   backend base URL (default https://bridle.3sln.com)
   --local           use http://localhost:8787
   --room <code>     fixed room code (default: random)

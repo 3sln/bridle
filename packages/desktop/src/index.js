@@ -81,7 +81,7 @@ async function cmdDaemon(name) {
   await loadEnvFile(envFileFor(setup.name));
   const config = configFromSetup(setup);
   const engine = buildEngine(config);
-  ui.note(`bridle daemon for "${setup.name}" — room ${setup.room}, agent ${setup.agent.join(' ')}`);
+  ui.note(`bridle daemon for "${setup.name}" — room ${setup.room}, agent ${setup.agent?.id || (setup.agent?.command || []).join(' ')}`);
   await runSession(engine, config, { ui: ui.quiet });
   await engine.dispose();
   process.exit(0);
@@ -124,7 +124,7 @@ async function cmdInstall() {
     new InstallSetupAction({
       name: config.name,
       room: config.room,
-      agent: config.agent.command,
+      agent: { id: config.agent.id, command: config.agent.command },
       cwd: config.agent.cwd,
       backendUrl: config.backendUrl,
     }),
