@@ -116,6 +116,8 @@ export function setupMediaSession(handlers) {
     bind('stop', handlers.stop);
     bind('previoustrack', handlers.previous);
     bind('nexttrack', handlers.next);
+    bind('seekforward', handlers.seekForward);
+    bind('seekbackward', handlers.seekBackward);
     bind('togglemicrophone', handlers.toggleMic);
     bind('hangup', handlers.hangup);
   }

@@ -223,6 +223,7 @@ export class TetherQuery extends Query {
     function onPeerOpen() {
       push({ connection: CONNECTION.TETHERED, error: null });
       peer.send(helloGuest());
+      updateNowPlaying();
       if (settings.get('conversationOnConnect') || settings.get('drivingMode')) startConversation();
     }
 
@@ -279,6 +280,7 @@ export class TetherQuery extends Query {
           const base = (msg.cwd || '').split(/[\\/]/).filter(Boolean).pop();
           if (state.activeTetherId) tethers.setAutoLabel(state.activeTetherId, base ? `${msg.agent} · ${base}` : msg.agent);
           addMessage('system', `connected to ${msg.agent || 'agent'}`, 'status');
+          updateNowPlaying();
           break;
         }
         case LINK.OUTPUT:
@@ -303,6 +305,7 @@ export class TetherQuery extends Query {
           markAssistantDone();
           push({ currentSession: { id: msg.id, title: msg.title }, sessionsOpen: false });
           addMessage('system', msg.resumed ? `resumed ${msg.title}` : 'new session', 'status');
+          updateNowPlaying();
           break;
 
         // --- front-end control (agent MCP tools) ---
@@ -419,14 +422,10 @@ export class TetherQuery extends Query {
           peer?.send(mkCommand(COMMAND.INTERRUPT));
           break;
         case CMD.FASTER:
-          settings.set('ttsRate', clamp(settings.get('ttsRate') + 0.15, 0.5, 2.5));
-          refreshSettings();
-          notifyNow();
+          adjustRate(0.15);
           break;
         case CMD.SLOWER:
-          settings.set('ttsRate', clamp(settings.get('ttsRate') - 0.15, 0.5, 2.5));
-          refreshSettings();
-          notifyNow();
+          adjustRate(-0.15);
           break;
         case CMD.CLEAR:
           state.messages = [];
@@ -496,6 +495,18 @@ export class TetherQuery extends Query {
         media.setListening(true);
         earcon('listen');
       }
+    }
+    function adjustRate(delta) {
+      settings.set('ttsRate', clamp(settings.get('ttsRate') + delta, 0.5, 2.5));
+      refreshSettings();
+      notifyNow();
+    }
+    // Lock-screen / car "now playing" card: what you're tethered to.
+    function updateNowPlaying() {
+      media.update({
+        title: state.tetherLabel || state.agent || 'bridle',
+        artist: (state.currentSession && state.currentSession.title) || (state.agent ? 'voice agent' : 'tether your agent'),
+      });
     }
 
     // --- UI intents (dispatched Actions emit these on the engineFeed) -------
@@ -596,6 +607,8 @@ export class TetherQuery extends Query {
       stop: () => tts.cancel(), // barge-in
       previous: () => tts.repeat(),
       next: () => peer?.send(mkCommand(COMMAND.INTERRUPT)), // skip = interrupt the turn
+      seekForward: () => adjustRate(0.15), // faster speech
+      seekBackward: () => adjustRate(-0.15), // slower speech
       hangup: () => stopConversation(),
     });
 
