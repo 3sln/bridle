@@ -46,6 +46,7 @@ export default alias(function (state) {
       toggle('conversationOnConnect', 'Start conversation on connect'),
       toggle('earcons', 'Audio cues (earcons)'),
       toggle('keepAwake', 'Keep screen awake'),
+      toggle('mediaControls', 'Headset / car buttons'),
       slider('ttsRate', 'Speech rate', 0.5, 2.5, 0.05),
       voicePicker,
       slider('vadThreshold', 'Mic sensitivity', 0.004, 0.05, 0.002),

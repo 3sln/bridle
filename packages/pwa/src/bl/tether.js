@@ -468,7 +468,9 @@ export class TetherQuery extends Query {
         earcons.resume(); // unlock audio for earcons within this user gesture
         await mic.start();
         if (settings.get('keepAwake') || settings.get('drivingMode')) wake.enable();
+        if (settings.get('mediaControls')) media.activate(); // hold session for hw buttons
         push({ conversation: true, listening: true });
+        media.setListening(true);
         earcon('listen');
       } catch (err) {
         push({ error: `mic: ${err.message}` });
@@ -478,6 +480,7 @@ export class TetherQuery extends Query {
       await mic.stop();
       tts.cancel();
       wake.disable();
+      media.deactivate();
       push({ conversation: false, listening: false });
       earcon('stop');
     }
@@ -485,10 +488,12 @@ export class TetherQuery extends Query {
       if (state.listening) {
         mic.pause();
         push({ listening: false });
+        media.setListening(false);
         earcon('stop');
       } else {
         mic.resume();
         push({ listening: true });
+        media.setListening(true);
         earcon('listen');
       }
     }
@@ -583,16 +588,16 @@ export class TetherQuery extends Query {
     }
     engineFeed.addEventListener('intent', onIntent);
 
-    // Hardware transport controls (car / headset / lock screen).
+    // Hardware transport controls (headset / Bluetooth / car / lock screen).
     const media = setupMediaSession({
-      play: () => (state.conversation ? toggleListening() : startConversation()),
+      play: () => { if (!state.conversation) startConversation(); else if (!state.listening) toggleListening(); },
       pause: () => state.listening && toggleListening(),
-      stop: () => tts.cancel(),
+      toggleMic: () => (state.conversation ? toggleListening() : startConversation()),
+      stop: () => tts.cancel(), // barge-in
       previous: () => tts.repeat(),
-      next: () => peer?.send(mkCommand(COMMAND.INTERRUPT)),
+      next: () => peer?.send(mkCommand(COMMAND.INTERRUPT)), // skip = interrupt the turn
+      hangup: () => stopConversation(),
     });
-    tts.addEventListener('speaking', () => media.setState(true));
-    tts.addEventListener('idle', () => media.setState(false));
 
     // --- go -----------------------------------------------------------------
     connectActive();

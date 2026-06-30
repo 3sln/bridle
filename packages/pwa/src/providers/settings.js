@@ -19,6 +19,7 @@ export const DEFAULTS = Object.freeze({
   drivingMode: false, // auto-conversation on connect + keep-awake + earcons
   earcons: true, // non-visual audio cues for listening/processing/done
   keepAwake: true, // hold a screen wake lock while in conversation
+  mediaControls: true, // headset/car/lock-screen buttons (holds audio focus)
 });
 
 class Settings extends EventTarget {

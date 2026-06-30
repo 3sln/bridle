@@ -73,43 +73,120 @@ export function createWakeLock() {
 }
 
 // ---- media session: hardware transport controls --------------------------
-// Maps play/pause/stop/prev/next (steering wheel, headset, lock screen) onto
-// handlers. Note: on some browsers the controls only surface while a media
-// element is actually playing — the audio assets the agent plays will engage it.
+// Maps headset / Bluetooth / car / lock-screen buttons onto handlers. These only
+// fire while the page is actually playing audio, so we keep a SILENT looping
+// keepalive element playing while a conversation is active — that holds the
+// media session so the buttons reach us even when we're only listening.
+//
+// Trade-off: holding the session takes audio focus, so the user's music ducks/
+// pauses during a bridle conversation (like talking to a voice assistant) and
+// resumes when it ends. Gate with the `mediaControls` setting if undesired.
+//
+// playbackState mirrors *listening*, so a single-button headset toggles
+// listen/pause; togglemicrophone does the same on devices that expose it.
 export function setupMediaSession(handlers) {
-  if (!('mediaSession' in navigator)) return { setState() {}, update() {} };
-  const ms = navigator.mediaSession;
-  try {
-    ms.metadata = new MediaMetadata({ title: 'bridle', artist: 'voice agent' });
-  } catch {
-    /* noop */
-  }
+  const supported = 'mediaSession' in navigator;
+  let audio = null;
+  const ensureAudio = () => {
+    if (!audio) {
+      audio = new Audio(silentWavUrl());
+      audio.loop = true;
+      audio.preload = 'auto';
+    }
+    return audio;
+  };
+  const wrap = (fn) => (fn ? () => { try { fn(); } catch { /* noop */ } } : null);
   const bind = (action, fn) => {
+    if (!supported) return;
     try {
-      ms.setActionHandler(action, fn || null);
+      navigator.mediaSession.setActionHandler(action, wrap(fn));
     } catch {
-      /* action unsupported */
+      /* action unsupported on this browser */
     }
   };
-  bind('play', handlers.play);
-  bind('pause', handlers.pause);
-  bind('stop', handlers.stop);
-  bind('previoustrack', handlers.previous);
-  bind('nexttrack', handlers.next);
+
+  if (supported) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: 'bridle', artist: 'voice agent' });
+    } catch {
+      /* noop */
+    }
+    bind('play', handlers.play);
+    bind('pause', handlers.pause);
+    bind('stop', handlers.stop);
+    bind('previoustrack', handlers.previous);
+    bind('nexttrack', handlers.next);
+    bind('togglemicrophone', handlers.toggleMic);
+    bind('hangup', handlers.hangup);
+  }
+
+  const setPlaybackState = (s) => {
+    if (!supported) return;
+    try {
+      navigator.mediaSession.playbackState = s;
+    } catch {
+      /* noop */
+    }
+  };
+
   return {
-    setState(playing) {
+    // Start holding the session (call within a user gesture for autoplay).
+    activate() {
       try {
-        ms.playbackState = playing ? 'playing' : 'paused';
+        ensureAudio().play().catch(() => {});
+      } catch {
+        /* noop */
+      }
+      setPlaybackState('playing');
+    },
+    deactivate() {
+      try {
+        audio?.pause();
+      } catch {
+        /* noop */
+      }
+      setPlaybackState('none');
+    },
+    // Reflect listening state so the single-button toggle works.
+    setListening(on) {
+      setPlaybackState(on ? 'playing' : 'paused');
+      try {
+        navigator.mediaSession.setMicrophoneActive?.(on);
       } catch {
         /* noop */
       }
     },
     update(meta) {
+      if (!supported) return;
       try {
-        ms.metadata = new MediaMetadata({ title: 'bridle', ...meta });
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'bridle', ...meta });
       } catch {
         /* noop */
       }
     },
   };
+}
+
+// A tiny silent mono 8 kHz WAV as an object URL — the keepalive's "media".
+function silentWavUrl() {
+  const rate = 8000;
+  const samples = rate / 2; // 0.5s
+  const buf = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF');
+  v.setUint32(4, 36 + samples * 2, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  w(36, 'data');
+  v.setUint32(40, samples * 2, true);
+  // samples are already zero (silence)
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
