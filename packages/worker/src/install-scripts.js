@@ -2,6 +2,12 @@
 // They download the right prebuilt single-file binary from GitHub Releases and
 // drop it on PATH. The binaries are produced by `bun build --compile --target`
 // in CI and uploaded as release assets named bridle-<os>-<arch>[.exe].
+//
+// We resolve the *newest* release via the GitHub API rather than the
+// `/releases/latest/download/` redirect, because that redirect silently skips
+// pre-releases — so a pre-release tag would 404. The API lists releases newest
+// first (drafts excluded for anonymous callers), so the first entry's tag is the
+// one to download, pre-release or not.
 
 const REPO = '3sln/bridal';
 
@@ -10,6 +16,7 @@ export const INSTALL_SH = `#!/bin/sh
 set -e
 REPO="${REPO}"
 BIN="bridle"
+API="https://api.github.com/repos/\${REPO}/releases"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -25,11 +32,24 @@ case "$os" in
 esac
 
 asset="bridle-\${os}-\${arch}"
-url="https://github.com/\${REPO}/releases/latest/download/\${asset}"
 dest="\${BRIDLE_INSTALL:-$HOME/.local/bin}"
 mkdir -p "$dest"
 
-echo "bridle: downloading $asset…"
+fetch() {
+  if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"; else wget -qO- "$1"; fi
+}
+
+# Newest release tag (pre-releases included; the first tag_name in the list is
+# the most recent). /releases/latest would skip pre-releases.
+echo "bridle: finding latest release…"
+tag=$(fetch "$API" | grep -m1 '"tag_name"' | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\\1/')
+if [ -z "$tag" ]; then
+  echo "bridle: no release found for \${REPO}" >&2
+  exit 1
+fi
+url="https://github.com/\${REPO}/releases/download/\${tag}/\${asset}"
+
+echo "bridle: downloading $asset ($tag)…"
 if command -v curl >/dev/null 2>&1; then
   curl -fSL "$url" -o "$dest/$BIN"
 else
@@ -52,12 +72,20 @@ $ErrorActionPreference = 'Stop'
 $repo = '${REPO}'
 $arch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'arm64' }
 $asset = "bridle-windows-$arch.exe"
-$url = "https://github.com/$repo/releases/latest/download/$asset"
+
+# Newest release (pre-releases included; /releases/latest would skip them).
+Write-Host "bridle: finding latest release…"
+$headers = @{ 'User-Agent' = 'bridle-installer'; 'Accept' = 'application/vnd.github+json' }
+$releases = @(Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Headers $headers)
+if ($releases.Count -eq 0) { throw "bridle: no release found for $repo" }
+$tag = $releases[0].tag_name
+$url = "https://github.com/$repo/releases/download/$tag/$asset"
+
 $dest = Join-Path $env:LOCALAPPDATA 'Programs\\bridle'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 $out = Join-Path $dest 'bridle.exe'
 
-Write-Host "bridle: downloading $asset…"
+Write-Host "bridle: downloading $asset ($tag)…"
 Invoke-WebRequest -Uri $url -OutFile $out
 
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')

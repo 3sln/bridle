@@ -1,8 +1,16 @@
 name: release
 
 # Build the single-file `bridle` desktop binaries for every platform and attach
-# them to the GitHub Release. The installer at bridle.3sln.com/install.sh pulls
-# these by name (bridle-<os>-<arch>[.exe]).
+# them to the GitHub Release. The installer at bridle.3sln.com pulls them by
+# name (bridle-<os>-<arch>[.exe]).
+#
+# Bun cross-compiles every target from one Linux runner, so this is a SINGLE job
+# that builds all binaries then uploads them in one release step. The previous
+# matrix ran five parallel jobs that each called action-gh-release on the same
+# release — they raced and could fail with "Resource not accessible by
+# integration" when overwriting each other's (or a pre-existing) asset. One job
+# that owns the release avoids that. Don't pre-create the release by hand; let
+# this workflow create it.
 
 on:
   push:
@@ -13,35 +21,34 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - target: bun-linux-x64
-            out: bridle-linux-x64
-          - target: bun-linux-arm64
-            out: bridle-linux-arm64
-          - target: bun-darwin-x64
-            out: bridle-darwin-x64
-          - target: bun-darwin-arm64
-            out: bridle-darwin-arm64
-          - target: bun-windows-x64
-            out: bridle-windows-x64.exe
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       # werift is pure JS (cross-compiles fine); webview-bun is native + optional,
       # so keep it external and let it load at runtime when present.
-      - name: Compile ${{ matrix.out }}
+      - name: Build all targets
         run: |
-          bun build packages/desktop/src/index.js \
-            --compile --target=${{ matrix.target }} \
-            --external webview-bun \
-            --outfile dist/${{ matrix.out }}
+          set -e
+          mkdir -p dist
+          build() {
+            echo "::group::$2"
+            bun build packages/desktop/src/index.js \
+              --compile --target="$1" \
+              --external webview-bun \
+              --outfile "dist/$2"
+            echo "::endgroup::"
+          }
+          build bun-linux-x64    bridle-linux-x64
+          build bun-linux-arm64  bridle-linux-arm64
+          build bun-darwin-x64   bridle-darwin-x64
+          build bun-darwin-arm64 bridle-darwin-arm64
+          build bun-windows-x64  bridle-windows-x64.exe
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: dist/${{ matrix.out }}
+          files: dist/*
           fail_on_unmatched_files: true
+          make_latest: true
