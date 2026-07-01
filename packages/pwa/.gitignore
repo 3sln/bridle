@@ -1,0 +1,5 @@
+# Vendored voice-runtime assets, copied from node_modules by scripts/copy-runtime-assets.mjs
+public/vad.worklet.bundle.min.js
+public/silero_vad_v5.onnx
+public/ort-wasm-simd-threaded.wasm
+public/ort-wasm-simd-threaded.mjs

@@ -14,7 +14,7 @@ function state(over = {}) {
     connection: 'no-tether', conversation: false, listening: false, speaking: false,
     processing: false, sttState: 'idle', sttProgress: 0, messages: [], level: 0,
     error: null, room: '', agent: null, micSupported: true, ttsSupported: true,
-    voices: [], settings: { autoSpeak: true, ttsRate: 1, ttsVoice: '', vadThreshold: 0.012 },
+    voices: [], settings: { autoSpeak: true, ttsRate: 1, ttsVoice: '', vadHangoverMs: 500 },
     sheetOpen: false, sessions: [], currentSession: null, sessionsOpen: false,
     statusLine: '', toast: null, ask: null, tethers: [], activeTetherId: null,
     tetherLabel: null, tethersOpen: false, ...over,

@@ -50,7 +50,6 @@ export default alias(function (state) {
       toggle('mediaControls', 'Headset / car buttons'),
       slider('ttsRate', 'Speech rate', 0.5, 2.5, 0.05),
       voicePicker,
-      slider('vadThreshold', 'Mic sensitivity', 0.004, 0.05, 0.002),
       slider('vadHangoverMs', 'Pause before sending (ms)', 200, 1500, 50),
       leadIn,
       button({ className: 'btn ghost row-btn desktop-only' }, icon('keyboard'), 'Keyboard shortcuts')

@@ -76,9 +76,18 @@ export class Stt extends EventTarget {
   }
 
   async transcribe(blob) {
+    return this.#run(await this.#decode(blob));
+  }
+
+  /** Transcribe raw mono 16 kHz Float32 samples (e.g. straight from the VAD — no
+   *  encode/decode round-trip). */
+  transcribeSamples(samples) {
+    return this.#run(samples);
+  }
+
+  #run(samples) {
     this.#ensureWorker();
     this.emit('working', {});
-    const samples = await this.#decode(blob);
     const id = ++this.seq;
     const p = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
     this.worker.postMessage(

@@ -10,8 +10,7 @@ export const DEFAULTS = Object.freeze({
   ttsRate: 1.0,
   ttsVoice: '', // '' = browser default
   conversationOnConnect: false, // start in conversation mode automatically
-  vadThreshold: 0.012, // RMS gate for voice activity (0..1)
-  vadHangoverMs: 500, // silence gap that ends an utterance and sends it (snappy back-and-forth)
+  vadHangoverMs: 500, // trailing pause (redemption) that ends a Silero segment and sends it
   commandLeadIn: 'bridle', // optional wake word to force command interpretation
   language: '', // Whisper language hint ('' = auto; ignored by *.en models)
   sttModel: 'Xenova/whisper-tiny.en', // offline Whisper model run in-browser
