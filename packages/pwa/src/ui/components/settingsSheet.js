@@ -51,7 +51,7 @@ export default alias(function (state) {
       slider('ttsRate', 'Speech rate', 0.5, 2.5, 0.05),
       voicePicker,
       slider('vadThreshold', 'Mic sensitivity', 0.004, 0.05, 0.002),
-      slider('vadHangoverMs', 'Silence to send (ms)', 400, 2000, 50),
+      slider('vadHangoverMs', 'Pause before sending (ms)', 200, 1500, 50),
       leadIn,
       button({ className: 'btn ghost row-btn desktop-only' }, icon('keyboard'), 'Keyboard shortcuts')
         .on({ click: () => self.dispatchEvent(new CustomEvent('open-shortcuts', { bubbles: true })) }),

@@ -11,7 +11,7 @@ export const DEFAULTS = Object.freeze({
   ttsVoice: '', // '' = browser default
   conversationOnConnect: false, // start in conversation mode automatically
   vadThreshold: 0.012, // RMS gate for voice activity (0..1)
-  vadHangoverMs: 900, // silence before an utterance is considered finished
+  vadHangoverMs: 500, // silence gap that ends an utterance and sends it (snappy back-and-forth)
   commandLeadIn: 'bridle', // optional wake word to force command interpretation
   language: '', // Whisper language hint ('' = auto; ignored by *.en models)
   sttModel: 'Xenova/whisper-tiny.en', // offline Whisper model run in-browser
@@ -22,10 +22,19 @@ export const DEFAULTS = Object.freeze({
   mediaControls: true, // headset/car/lock-screen buttons (holds audio focus)
 });
 
+const LEGACY_HANGOVER_MS = 900; // old default that felt like "wait until I'm finished"
+
 class Settings extends EventTarget {
   constructor() {
     super();
-    this.values = { ...DEFAULTS, ...read() };
+    const stored = read();
+    this.values = { ...DEFAULTS, ...stored };
+    // One-time migration: adopt the snappier send gap for anyone still sitting on
+    // the old default (they never deliberately chose 900ms).
+    if (stored.vadHangoverMs === LEGACY_HANGOVER_MS) {
+      this.values.vadHangoverMs = DEFAULTS.vadHangoverMs;
+      write(this.values);
+    }
   }
   get(key) {
     return this.values[key];
