@@ -11,7 +11,6 @@ import { Window } from 'happy-dom';
 let document;
 let dd;
 let app;
-let landing;
 let statusBar;
 
 beforeAll(async () => {
@@ -29,7 +28,6 @@ beforeAll(async () => {
   // Import after globals are in place (module top-levels may touch them).
   ({ dd } = await import('../src/runtime.js'));
   app = (await import('../src/ui/compositions/app.js')).default;
-  landing = (await import('../src/ui/components/landing.js')).default;
   statusBar = (await import('../src/ui/components/statusBar.js')).default;
 });
 
@@ -61,13 +59,6 @@ test('regression: passing the uncalled factory renders inert text, not UI', () =
   const root = mount(App); // the bug: factory not called
   expect(root.querySelector('.screen')).toBeFalsy();
   expect(root.textContent).toContain('=>'); // the stringified arrow function
-});
-
-test('landing component renders its hero and install command', () => {
-  const root = mount(landing({}));
-  expect(root.querySelector('.landing')).toBeTruthy();
-  expect(root.querySelector('.lp-tagline')?.textContent).toContain('terminal AI agent');
-  expect(root.textContent).toContain('bridle.3sln.com/install.sh');
 });
 
 test('statusBar reflects connection state', () => {

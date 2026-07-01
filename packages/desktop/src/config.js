@@ -90,7 +90,7 @@ export function loadConfig(parsed = parseArgs(), env = process.env) {
     name,
     room,
     backendUrl: backend,
-    pwaUrl: `${backend}/#room=${room}`,
+    pwaUrl: `${backend}/app/#room=${room}`,
     agent: profile ? { ...profile, cwd: process.cwd(), modeName, modeArgs: profile.modes?.[modeName] || [] } : null,
     session: {
       id: get('--session') || null,
@@ -117,7 +117,7 @@ export function configFromSetup(setup, env = process.env) {
     name: setup.name,
     room: setup.room,
     backendUrl: backend,
-    pwaUrl: `${backend}/#room=${setup.room}`,
+    pwaUrl: `${backend}/app/#room=${setup.room}`,
     agent: { ...profile, cwd: setup.cwd || process.cwd(), modeName: a.mode || null, modeArgs: profile.modes?.[a.mode] || [] },
     session: { id: null, fresh: true, attachLatest: false },
     iceServers: DEFAULT_ICE_SERVERS,

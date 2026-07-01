@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 // Voice-runtime assets that must be served same-origin (mic.js points Silero's
 // baseAssetPath/onnxWASMBasePath at '/'): the VAD worklet + model and the ONNX
@@ -48,11 +48,20 @@ function voiceRuntimeAssets() {
 
 export default defineConfig({
   base: '/',
+  // Two pages: a static landing at '/' and the installable PWA at '/app/'. MPA so
+  // each path serves its own document instead of SPA-falling-back to '/'.
+  appType: 'mpa',
   plugins: [voiceRuntimeAssets()],
   build: {
     target: 'es2022',
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        landing: resolve(import.meta.dirname, 'index.html'),
+        app: resolve(import.meta.dirname, 'app/index.html'),
+      },
+    },
   },
   server: {
     host: true, // reachable from a phone on the LAN during dev

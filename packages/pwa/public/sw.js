@@ -1,10 +1,12 @@
 // Minimal service worker: makes the app installable and gives an offline shell.
-// App-shell precache + network-first for navigations (so new deploys win),
-// cache-first for hashed static assets. Real-time traffic is P2P/WebSocket and
-// never touches the SW.
+// Scope is the origin root ('/') even though the app lives at /app/, because the
+// app pulls hashed JS and the VAD/ORT wasm from '/assets' and '/', which a
+// /app-scoped worker couldn't cache. App-shell precache + network-first for
+// navigations (so new deploys win), cache-first for hashed static assets.
+// Real-time traffic is P2P/WebSocket and never touches the SW.
 
-const CACHE = 'bridle-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'bridle-v2';
+const SHELL = ['/', '/app/', '/app/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -23,7 +25,9 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return; // don't touch signaling/cross-origin
 
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match('/index.html')));
+    // Offline fallback to the right shell: the app under /app/, else the landing.
+    const shell = url.pathname.startsWith('/app') ? '/app/' : '/';
+    e.respondWith(fetch(req).catch(() => caches.match(shell)));
     return;
   }
   e.respondWith(

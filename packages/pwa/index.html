@@ -2,25 +2,110 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0b0f" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta
+      name="description"
+      content="Tether a coding-agent CLI on your desktop to your phone over WebRTC — voice and chat, hands-free."
+    />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>bridle</title>
+    <title>bridle — talk to your terminal AI agent from your phone</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <main class="app" aria-live="polite"></main>
-    <script type="module" src="/src/main.js"></script>
+    <div class="landing">
+      <div class="lp">
+        <header class="lp-hero">
+          <p class="lp-logo">🐴 bridle</p>
+          <h1 class="lp-tagline">Talk to your terminal AI agent from your phone.</h1>
+          <p class="lp-sub">
+            Tether a coding-agent CLI on your desktop to your phone over WebRTC — voice and chat,
+            hands-free. The agent runs where your code is; you drive it from the couch, the kitchen,
+            or the car.
+          </p>
+          <div class="lp-actions" style="justify-content: center">
+            <a class="btn lp-btn" href="/app/">Open the app</a>
+          </div>
+        </header>
+
+        <section class="lp-card">
+          <h2>1 · Install on your desktop</h2>
+          <p class="lp-muted" id="os-label">macOS / Linux:</p>
+          <div class="lp-cmd">
+            <code class="lp-cmd-text" id="primary-cmd">curl -fsSL https://bridle.3sln.com/install.sh | sh</code>
+            <button class="btn ghost lp-copy" title="Copy to clipboard">Copy</button>
+          </div>
+          <details class="lp-details">
+            <summary id="other-summary">Windows (PowerShell)</summary>
+            <div class="lp-cmd">
+              <code class="lp-cmd-text" id="other-cmd">irm https://bridle.3sln.com/install.ps1 | iex</code>
+              <button class="btn ghost lp-copy" title="Copy to clipboard">Copy</button>
+            </div>
+          </details>
+          <p class="lp-muted lp-small">
+            No API keys: speech-to-text runs on-device (Whisper), text-to-speech is your browser’s.
+          </p>
+        </section>
+
+        <section class="lp-card">
+          <h2>2 · Pair with your phone</h2>
+          <ol class="lp-steps">
+            <li>In any project, run <code>bridle tether work claude</code> (or <code>… codex</code>, etc.).</li>
+            <li>It prints a QR and installs itself as a background service for that project.</li>
+            <li>Scan the QR with your phone — it opens the app and links over a peer-to-peer data channel.</li>
+            <li>Talk to your agent. Tap the mic to go hands-free and just speak; say “stop talking” to cut in.</li>
+          </ol>
+          <div class="lp-actions">
+            <a class="btn lp-btn" href="/app/">Open the app</a>
+            <a class="btn ghost lp-btn" href="https://github.com/3sln/bridle" target="_blank" rel="noopener">Docs &amp; source</a>
+          </div>
+        </section>
+
+        <section class="lp-card">
+          <h2>What it’s for</h2>
+          <ul class="lp-feats">
+            <li><strong>Voice in and out</strong> — on-device Whisper STT, browser TTS, a hands-free conversation mode with barge-in.</li>
+            <li><strong>Any agent</strong> — claude, codex, gemini, aider, opencode, goose… or pipe any other CLI.</li>
+            <li><strong>Private and P2P</strong> — chat and files flow phone↔desktop directly; the backend only brokers the handshake.</li>
+            <li><strong>Driving mode</strong> — earcons, screen wake-lock, and car/headset/lock-screen media buttons for eyes-off use.</li>
+          </ul>
+        </section>
+
+        <footer class="lp-foot">
+          <span>🐴 bridle</span>
+          <span class="lp-dot">·</span>
+          <a href="https://github.com/3sln/bridle" target="_blank" rel="noopener">github.com/3sln/bridle</a>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      // Put the visitor's OS first; the other stays one tap away in the <details>.
+      (function () {
+        const isWin = /win/i.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '');
+        if (isWin) {
+          document.getElementById('os-label').textContent = 'Windows (PowerShell):';
+          document.getElementById('primary-cmd').textContent = 'irm https://bridle.3sln.com/install.ps1 | iex';
+          document.getElementById('other-summary').textContent = 'macOS / Linux';
+          document.getElementById('other-cmd').textContent = 'curl -fsSL https://bridle.3sln.com/install.sh | sh';
+        }
+        // Clipboard is a pure UI affordance — wire the copy buttons inline.
+        for (const btn of document.querySelectorAll('.lp-copy')) {
+          btn.addEventListener('click', function () {
+            const line = this.parentElement.querySelector('.lp-cmd-text').textContent;
+            const done = (label) => { this.textContent = label; setTimeout(() => { this.textContent = 'Copy'; }, 1200); };
+            if (!navigator.clipboard) return done('—');
+            navigator.clipboard.writeText(line).then(() => done('Copied'), () => done('Copy failed'));
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
