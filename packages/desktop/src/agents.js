@@ -39,10 +39,9 @@ const BUILTIN_PROFILES = {
     command: ['claude'],
     mode: 'oneshot',
     tier: 'enhanced',
-    // Selectable run modes (extra flags): `bridle tether <name> claude --mode yolo`.
-    // NOTE: an `auto` (classifier) mode belongs here too — pending the exact CLI
-    // flag; users can already add it via profiles.json without a code change.
+    // Selectable run modes (extra flags): `bridle tether <name> claude --mode auto`.
     modes: {
+      auto: ['--permission-mode', 'auto'], // classifier decides what's safe vs. too risky
       edits: ['--permission-mode', 'acceptEdits'], // auto-accept edits, still gated on risky ops
       yolo: ['--dangerously-skip-permissions'], // no prompts at all — use with care
       plan: ['--permission-mode', 'plan'], // plan-only, makes no changes
