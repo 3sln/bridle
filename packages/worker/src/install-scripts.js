@@ -74,11 +74,14 @@ $arch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'arm64' }
 $asset = "bridle-windows-$arch.exe"
 
 # Newest release (pre-releases included; /releases/latest would skip them).
+# Invoke-RestMethod hands back the JSON array as a single [Object[]], so indexing
+# $releases[0] would grab the whole array (and .tag_name would enumerate EVERY
+# tag). Pull the tag_name column and take the first — newest — entry instead.
 Write-Host "bridle: finding latest release…"
 $headers = @{ 'User-Agent' = 'bridle-installer'; 'Accept' = 'application/vnd.github+json' }
-$releases = @(Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Headers $headers)
-if ($releases.Count -eq 0) { throw "bridle: no release found for $repo" }
-$tag = $releases[0].tag_name
+$releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases" -Headers $headers
+$tag = @($releases.tag_name)[0]
+if (-not $tag) { throw "bridle: no release found for $repo" }
 $url = "https://github.com/$repo/releases/download/$tag/$asset"
 
 $dest = Join-Path $env:LOCALAPPDATA 'Programs\\bridle'
