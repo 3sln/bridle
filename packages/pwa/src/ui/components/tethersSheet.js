@@ -29,7 +29,7 @@ export default alias(function (state) {
       list.length
         ? ul({ className: 'session-list' },
             list.map((t, i) =>
-              li({ className: `session ${t.id === state.activeTetherId ? 'current' : ''}` },
+              li({ className: `session ${t.id === state.activeTetherId ? 'current' : ''}`, tabindex: '0', role: 'button' },
                 span({ className: 'idx' }, icon('dns')),
                 div({ className: 'session-meta' },
                   span({ className: 'session-title' }, t.label || t.room),
@@ -38,7 +38,10 @@ export default alias(function (state) {
                 button({ className: 'icon-btn remove', title: 'Remove', 'aria-label': 'Remove tether' }, icon('close')).on({
                   click: (e) => { e.stopPropagation(); fire('remove-tether', { id: t.id }); },
                 }),
-              ).on({ click: () => fire('switch-tether', { id: t.id }) }).key(t.id),
+              ).on({
+                click: () => fire('switch-tether', { id: t.id }),
+                keydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire('switch-tether', { id: t.id }); } },
+              }).key(t.id),
             ),
           )
         : p({ className: 'hint' }, 'No tethers yet. Scan a desktop QR, or add its room code below.'),

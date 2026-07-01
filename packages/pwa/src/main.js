@@ -13,6 +13,7 @@ import { TtsProvider } from './providers/tts.js';
 import { SttProvider } from './providers/stt.js';
 import { TethersProvider } from './providers/tethers.js';
 import { IdentityProvider } from './providers/identity.js';
+import { installShortcuts } from './keyboard.js';
 import app from './ui/compositions/app.js';
 
 const root = document.querySelector('.app');
@@ -36,6 +37,9 @@ const engine = new Engine({
 // stringify it as a text node — i.e. the whole app renders nothing.
 const App = app(engine);
 dd.reconcile(root, [App()]);
+
+// Desktop keyboard shortcuts (and Escape/Back for TV remotes).
+installShortcuts(engine);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

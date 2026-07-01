@@ -1,5 +1,6 @@
 // Settings sheet. Emits `set` {key,value} and `close`. Pure dodo.
 import { dd } from '../../runtime.js';
+import { icon } from '../icon.js';
 
 const { alias, div, label, span, input, select, option, button } = dd;
 
@@ -52,6 +53,8 @@ export default alias(function (state) {
       slider('vadThreshold', 'Mic sensitivity', 0.004, 0.05, 0.002),
       slider('vadHangoverMs', 'Silence to send (ms)', 400, 2000, 50),
       leadIn,
+      button({ className: 'btn ghost row-btn desktop-only' }, icon('keyboard'), 'Keyboard shortcuts')
+        .on({ click: () => self.dispatchEvent(new CustomEvent('open-shortcuts', { bubbles: true })) }),
       div({ className: 'hint' }, `Say "${s.commandLeadIn || 'bridle'} pause", "${s.commandLeadIn || 'bridle'} repeat", or just "stop talking".`),
     ),
   ).on({

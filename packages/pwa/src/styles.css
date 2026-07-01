@@ -348,3 +348,101 @@ body {
 .lp-foot { text-align: center; color: var(--muted); font-size: 13px; display: flex; justify-content: center; align-items: center; gap: 8px; padding-top: 4px; }
 .lp-foot a { color: var(--accent-2); text-decoration: none; }
 .lp-foot .lp-dot { opacity: .6; }
+
+/* ======================================================================== */
+/* Adaptive: phone → tablet → desktop → TV. Progressive enhancement — the    */
+/* phone layout is the base; wider screens center a comfortable column and    */
+/* promote bottom-sheets to centered dialogs; TV/remote gets bigger targets   */
+/* and strong focus rings.                                                    */
+/* ======================================================================== */
+
+/* Keyboard / D-pad focus — visible on every interactive element, so the app
+   is fully navigable by keyboard (desktop) and remote (TV). Pointer users
+   never see it (:focus-visible). */
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.icon-btn:focus-visible, .bead:focus-visible, .fab:focus-visible, .tether-chip:focus-visible { outline-offset: 3px; }
+.composer-input:focus-visible { outline: none; }
+.session:focus-visible, .btn:focus-visible { outline-offset: 3px; }
+
+/* ---- tablet & up: center the app in a column -------------------------- */
+@media (min-width: 640px) {
+  body { --col: 760px; }
+  .screen, .shell > .screen { max-width: var(--col); margin: 0 auto; width: 100%; }
+  .shell {
+    align-items: stretch;
+  }
+  .screen {
+    border-left: 1px solid var(--line-soft);
+    border-right: 1px solid var(--line-soft);
+    background: linear-gradient(180deg, rgba(20,20,30,.35), rgba(10,10,16,.15));
+  }
+  .messages { padding: 22px 20px 10px; }
+  .msg .bubble { max-width: 76%; font-size: 15.5px; }
+  .controls { padding: 14px 18px calc(14px + env(safe-area-inset-bottom)); }
+
+  /* Bottom-sheets become centered dialogs on a big screen. */
+  .sheet-backdrop { align-items: center; justify-content: center; padding: 24px; }
+  .sheet {
+    max-width: 480px; border: 1px solid var(--line); border-radius: 20px;
+    max-height: min(80dvh, 720px); animation: pop .2s cubic-bezier(.2,.8,.2,1);
+    padding: 12px 20px 22px;
+  }
+  .sheet::before { display: none; }
+  @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+}
+
+/* ---- desktop: a touch more breathing room ----------------------------- */
+@media (min-width: 1024px) and (pointer: fine) {
+  body { --col: 860px; }
+  .hero-title { font-size: 34px; }
+  /* hover affordances only where a real pointer exists */
+  .msg .bubble { transition: transform .1s; }
+}
+
+/* ---- TV / big screen + remote: scale up, strong focus ----------------- */
+/* A large viewport with a coarse pointer and no hover is almost always a TV
+   or console browser driven by a D-pad. Scale the whole UI up and make focus
+   unmissable across the room. */
+@media (min-width: 1280px) and (pointer: coarse), (min-width: 1600px) and (hover: none) {
+  html { font-size: 20px; }
+  body { --col: 1100px; }
+  .status { min-height: 72px; padding: 14px 22px; }
+  .icon-btn { width: 52px; height: 52px; }
+  .icon-btn .msym { font-size: 28px; }
+  .fab { width: 60px; height: 60px; }
+  .fab .msym { font-size: 30px; }
+  .composer-input { min-height: 58px; font-size: 20px; border-radius: 29px; }
+  .msg .bubble { font-size: 20px; padding: 14px 20px; border-radius: 22px; }
+  .btn { padding: 16px 22px; font-size: 18px; }
+  .convo-orb { width: 60px; height: 60px; }
+  .convo-text { font-size: 20px; }
+  :focus-visible { outline-width: 3px; outline-offset: 4px; }
+  /* On TV, typing is painful — nudge toward voice. */
+  .composer-input::placeholder { }
+}
+
+/* Respect reduced-motion across all the added animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* ---- keyboard shortcuts help ------------------------------------------ */
+.sc-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 2px; border-bottom: 1px solid var(--line-soft); }
+.sc-desc { color: var(--text); font-size: 15px; }
+.sc-keys { display: flex; gap: 6px; flex: none; }
+kbd {
+  font-family: 'Inter', ui-monospace, monospace; font-size: 12px; font-weight: 600; line-height: 1;
+  color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 7px; padding: 5px 8px; min-width: 22px; text-align: center;
+}
+.sc-hint { padding-top: 12px; }
+
+/* A full-width, left-aligned button that sits among sheet rows. */
+.row-btn { width: 100%; justify-content: flex-start; gap: 12px; margin-top: 12px; }
+/* Hidden where there's no physical keyboard (touch phones/tablets, TV). */
+@media (hover: none) and (pointer: coarse) { .desktop-only { display: none; } }

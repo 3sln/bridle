@@ -25,6 +25,8 @@ import {
   CloseTethersAction,
   OpenDetailsAction,
   CloseDetailsAction,
+  OpenShortcutsAction,
+  CloseShortcutsAction,
   SwitchTetherAction,
   AddTetherAction,
   RemoveTetherAction,
@@ -39,6 +41,7 @@ import settingsSheet from '../components/settingsSheet.js';
 import sessionsSheet from '../components/sessionsSheet.js';
 import tethersSheet from '../components/tethersSheet.js';
 import detailsSheet from '../components/detailsSheet.js';
+import shortcutsSheet from '../components/shortcutsSheet.js';
 import askPrompt from '../components/askPrompt.js';
 
 const { alias, div, p, strong } = dd;
@@ -69,6 +72,8 @@ export default function app(engine) {
     'close-tethers': () => go(new CloseTethersAction()),
     'open-details': () => go(new OpenDetailsAction()),
     'close-details': () => go(new CloseDetailsAction()),
+    'open-shortcuts': () => { go(new CloseSettingsAction()); go(new OpenShortcutsAction()); },
+    'close-shortcuts': () => go(new CloseShortcutsAction()),
     'switch-tether': (e) => go(new SwitchTetherAction(e.detail.id)),
     'add-tether': (e) => go(new AddTetherAction(e.detail)),
     'remove-tether': (e) => go(new RemoveTetherAction(e.detail.id)),
@@ -106,6 +111,7 @@ function view(state) {
     state.sessionsOpen && sessionsSheet(state),
     state.tethersOpen && tethersSheet(state),
     state.detailsOpen && detailsSheet(state),
+    state.shortcutsOpen && shortcutsSheet(state),
     state.preparingVoice && voicePrep(state),
   );
 }

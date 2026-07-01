@@ -88,6 +88,7 @@ export class TetherQuery extends Query {
       tetherLabel: null,
       tethersOpen: false,
       detailsOpen: false, // the connection-details sheet (opened from the status bead)
+      shortcutsOpen: false, // keyboard-shortcuts help (desktop)
     };
 
     // Hands-free helpers (driving / eyes-off use).
@@ -654,6 +655,14 @@ export class TetherQuery extends Query {
         case 'set-details-sheet':
           push({ detailsOpen: !!it.open });
           break;
+        case 'set-shortcuts':
+          push({ shortcutsOpen: !!it.open });
+          break;
+        case 'close-sheets':
+          if (state.sheetOpen || state.sessionsOpen || state.tethersOpen || state.detailsOpen || state.shortcutsOpen || state.preparingVoice) {
+            push({ sheetOpen: false, sessionsOpen: false, tethersOpen: false, detailsOpen: false, shortcutsOpen: false, preparingVoice: false });
+          }
+          break;
         default:
           break;
       }
@@ -785,6 +794,15 @@ export class OpenDetailsAction extends IntentOnly {
 }
 export class CloseDetailsAction extends IntentOnly {
   intent = { type: 'set-details-sheet', open: false };
+}
+export class OpenShortcutsAction extends IntentOnly {
+  intent = { type: 'set-shortcuts', open: true };
+}
+export class CloseShortcutsAction extends IntentOnly {
+  intent = { type: 'set-shortcuts', open: false };
+}
+export class CloseSheetsAction extends IntentOnly {
+  intent = { type: 'close-sheets' };
 }
 export class SwitchTetherAction extends Action {
   constructor(id) {

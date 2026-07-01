@@ -18,13 +18,16 @@ export default alias(function (state) {
       list.length
         ? ul({ className: 'session-list' },
             list.map((s, i) =>
-              li({ className: `session ${state.currentSession && state.currentSession.id === s.id ? 'current' : ''}` },
+              li({ className: `session ${state.currentSession && state.currentSession.id === s.id ? 'current' : ''}`, tabindex: '0', role: 'button' },
                 span({ className: 'idx' }, String(i + 1)),
                 div({ className: 'session-meta' },
                   span({ className: 'session-title' }, s.title || s.id),
                   span({ className: 'session-when' }, relative(s.updatedAt)),
                 ),
-              ).on({ click: () => fire('connect-session', { id: s.id }) }).key(s.id),
+              ).on({
+                click: () => fire('connect-session', { id: s.id }),
+                keydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire('connect-session', { id: s.id }); } },
+              }).key(s.id),
             ),
           )
         : p({ className: 'hint' }, 'No earlier conversations for this project yet.'),
