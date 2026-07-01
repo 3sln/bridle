@@ -26,8 +26,33 @@ export class Speaker extends EventTarget {
 
   #pickVoice() {
     const name = this.getVoiceName?.();
-    if (!name) return null;
-    return this.voices().find((v) => v.name === name) || null;
+    if (name) {
+      const chosen = this.voices().find((v) => v.name === name);
+      if (chosen) return chosen; // explicit user choice wins
+    }
+    return this.#autoVoice();
+  }
+
+  // No voice chosen → match the browser's preferred language, so a user whose
+  // system default is (say) Cantonese still hears their UI language, not whatever
+  // the OS default voice happens to be.
+  #autoVoice() {
+    const voices = this.voices();
+    if (!voices.length) return null;
+    const norm = (l) => (l || '').toLowerCase().replace('_', '-');
+    const prefs = (navigator.languages?.length ? navigator.languages : [navigator.language || 'en-US']).map(norm);
+    const best = (list) => list.find((v) => v.default) || list.find((v) => v.localService) || list[0] || null;
+    // 1. exact locale (en-us), then 2. base language (en)
+    for (const pref of prefs) {
+      const hit = best(voices.filter((v) => norm(v.lang) === pref));
+      if (hit) return hit;
+    }
+    for (const pref of prefs) {
+      const base = pref.split('-')[0];
+      const hit = best(voices.filter((v) => norm(v.lang).split('-')[0] === base));
+      if (hit) return hit;
+    }
+    return null;
   }
 
   /** Speak text. Appends to the current queue (so streamed output reads in order). */
@@ -38,6 +63,9 @@ export class Speaker extends EventTarget {
       const u = new SpeechSynthesisUtterance(sentence);
       u.rate = this.getRate?.() || 1;
       const voice = this.#pickVoice();
+      // Set lang either way so the synth engine won't fall back to the OS default
+      // voice (which may be a different language than the user's browser).
+      u.lang = voice?.lang || navigator.language || 'en-US';
       if (voice) u.voice = voice;
       u.onstart = () => this.#setSpeaking(true);
       u.onend = () => this.#onUtteranceDone();

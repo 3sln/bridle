@@ -22,6 +22,7 @@ import {
 } from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
+import { meaningfulTranscript } from '../lib/transcript.js';
 import { createEarcons, createWakeLock, setupMediaSession } from '../hands.js';
 
 export const CONNECTION = Object.freeze({
@@ -440,17 +441,18 @@ export class TetherQuery extends Query {
     // The phone decides: command or dictation.
     function onTranscript(heard) {
       push({ processing: false });
-      if (!heard || !heard.trim()) return;
-      const cmd = parseCommand(heard, { leadIn: settings.get('commandLeadIn') });
+      const text = meaningfulTranscript(heard);
+      if (!text) return; // blank audio / background noise — ignore
+      const cmd = parseCommand(text, { leadIn: settings.get('commandLeadIn') });
       if (cmd) {
-        addMessage('user', heard, 'command');
+        addMessage('user', text, 'command');
         runCommand(cmd);
       } else if (state.ask) {
         // A question is pending — this speech is the answer.
-        answerAsk(resolveChoice(heard, state.ask.choices));
+        answerAsk(resolveChoice(text, state.ask.choices));
       } else {
-        addMessage('user', heard);
-        peer?.send(mkText(heard));
+        addMessage('user', text);
+        peer?.send(mkText(text));
         replyPending = true;
       }
     }
