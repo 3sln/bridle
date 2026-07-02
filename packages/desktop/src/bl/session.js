@@ -121,12 +121,27 @@ export class SessionQuery extends Query {
       if (e.detail?.state === 'turn-start') peer?.send(status('turn-start'));
     });
     onBase(agent, 'turn-end', (e) => peer?.send(status('turn-end', e.detail?.code)));
-    // Active session changed (created/attached) -> tell the phone.
+    // Active session changed (created/attached) -> tell the phone, and prime the
+    // agent exactly once per session (tracked in the registry) so a reconnect or
+    // resume never repeats the primer.
     onBase(agent, 'session', (e) => {
       currentSessionId = e.detail.id;
       const title = sessionTitles.get(e.detail.id) || shortId(e.detail.id);
       peer?.send(mkSession(e.detail.id, title, e.detail.resumed));
+      primeOnce(e.detail.id);
     });
+    function primeOnce(sid) {
+      if (sid) {
+        // oneshot: durable per-session tracking (survives reconnect + restart).
+        if (registry.isSeeded(sid)) return;
+        registry.markSeeded(sid);
+      } else {
+        // pipe agents have no session id — prime once per live process.
+        if (agent.primed) return;
+        agent.primed = true;
+      }
+      agent.prime();
+    }
 
     // Attach to (or create) an agent session for this connection and prime it.
     async function attachSession(resumeId) {
@@ -269,10 +284,15 @@ export class SessionQuery extends Query {
           await admitGuest(msg.client);
           break;
         }
-        case LINK.TEXT:
-          agent.write(msg.text.endsWith('\n') ? msg.text : msg.text + '\n');
+        case LINK.TEXT: {
+          // Tag the line so the (primed) agent knows it's from the phone and
+          // whether it was spoken or typed.
+          const prefix = msg.source === 'voice' ? 'bridle.voice: ' : 'bridle.text: ';
+          const line = prefix + msg.text.replace(/\n+$/, '');
+          agent.write(line + '\n');
           echo('guest-input', { text: msg.text });
           break;
+        }
         case LINK.COMMAND:
           runCommand(msg.name, msg.arg);
           break;

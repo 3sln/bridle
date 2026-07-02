@@ -27,6 +27,7 @@ export class AgentRunner extends EventTarget {
     this.busy = false;
     this.sessionId = null;
     this.first = true;
+    this.primed = false; // pipe agents: primed once per live process
     this.mcpUrl = null;
     this.mcpConfigPath = null;
     this.mcpReady = false;
@@ -81,9 +82,10 @@ export class AgentRunner extends EventTarget {
   }
 
   /**
-   * Attach to (or create) a session and inject the voice primer so the agent
-   * knows it's now speaking to a voice client. `resumeId` attaches to an existing
+   * Attach to (or create) a session. `resumeId` attaches to an existing
    * conversation; omitted, we create a fresh one (owning the UUID where we can).
+   * Priming is decided by the caller (the server tracks which sessions are already
+   * primed) via `prime()` — so a reconnect/resume never re-primes.
    */
   beginSession({ resumeId } = {}) {
     if (resumeId) {
@@ -97,10 +99,12 @@ export class AgentRunner extends EventTarget {
       this.first = true;
     }
     this.emit('session', { id: this.sessionId, resumed: !!resumeId });
+  }
 
+  /** Give the agent the bridle voice primer (once per session; caller-gated). */
+  prime() {
     if (this.isPipe) {
-      // Persistent REPLs: just speak the primer as a line.
-      this.write(VOICE_PRIMER + '\n');
+      this.write(VOICE_PRIMER + '\n'); // persistent REPL: just speak it
     } else {
       this.#enqueue(VOICE_PRIMER, { primer: true });
     }
@@ -171,6 +175,7 @@ export class AgentRunner extends EventTarget {
 
   #spawnPersistent() {
     if (this.running) return;
+    this.primed = false; // a fresh process needs priming again
     this.proc = Bun.spawn([...this.profile.command, ...(this.profile.modeArgs || [])], {
       cwd: this.cwd,
       env: this.env,

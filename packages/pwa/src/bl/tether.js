@@ -166,7 +166,7 @@ export class TetherQuery extends Query {
       // bubbles were already shown (queued) and just lose the badge.
       const combined = flushQueue();
       if (combined) {
-        peer?.send(mkText(combined));
+        peer?.send(mkText(combined.text, combined.source));
         beginTurn();
       } else {
         push({ awaitingReply: false });
@@ -188,15 +188,16 @@ export class TetherQuery extends Query {
     }
 
     // Send now if we can and the agent is idle; otherwise hold it (pending) in the
-    // right buffer and reflect that on the message.
-    function queueOrSend(text, kind) {
+    // right buffer and reflect that on the message. `source` ('voice'|'text') rides
+    // along so the desktop can tag the line for the agent.
+    function queueOrSend(text, kind, source = 'text') {
       if (!canDeliver()) {
-        outbox.push(addMessage('user', text, kind, { delivery: 'pending' }));
+        outbox.push(addMessage('user', text, kind, { delivery: 'pending', source }));
       } else if (state.awaitingReply) {
-        outQueue.push(addMessage('user', text, kind, { delivery: 'pending', queued: true }));
+        outQueue.push(addMessage('user', text, kind, { delivery: 'pending', queued: true, source }));
       } else {
-        addMessage('user', text, kind, { delivery: 'sent' });
-        peer?.send(mkText(text));
+        addMessage('user', text, kind, { delivery: 'sent', source });
+        peer?.send(mkText(text, source));
         beginTurn();
       }
     }
@@ -211,7 +212,7 @@ export class TetherQuery extends Query {
           outQueue.push(m);
         } else {
           m.delivery = 'sent';
-          peer?.send(mkText(m.content));
+          peer?.send(mkText(m.content, m.source));
           beginTurn();
         }
       }
@@ -229,11 +230,13 @@ export class TetherQuery extends Query {
       if (changed) notifyNow();
     }
     function flushQueue() {
-      if (!outQueue.length) return '';
+      if (!outQueue.length) return null;
       const combined = outQueue.map((q) => q.content).join('\n');
+      // If any held message was spoken, treat the batch as voice.
+      const source = outQueue.some((m) => m.source === 'voice') ? 'voice' : 'text';
       outQueue.forEach((m) => { m.queued = false; m.delivery = 'sent'; });
       outQueue.length = 0;
-      return combined;
+      return { text: combined, source };
     }
 
     // --- messages -----------------------------------------------------------
@@ -591,7 +594,7 @@ export class TetherQuery extends Query {
         // A question is pending — this speech is the answer.
         answerAsk(resolveChoice(text, state.ask.choices));
       } else {
-        queueOrSend(text);
+        queueOrSend(text, undefined, 'voice'); // transcribed speech
       }
     }
 
@@ -745,7 +748,7 @@ export class TetherQuery extends Query {
               addMessage('user', it.text, 'answer');
               push({ ask: null });
             } else {
-              queueOrSend(it.text);
+              queueOrSend(it.text, undefined, 'text'); // typed
             }
           }
           break;

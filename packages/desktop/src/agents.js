@@ -21,14 +21,16 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { configDir } from './registry.js';
 
-// Injected as the first turn whenever a voice client connects, so the agent
-// adapts its style to being heard rather than read.
+// Injected ONCE per session (the server tracks which sessions are primed), so the
+// agent learns the bridle conventions without re-priming on every reconnect.
 export const VOICE_PRIMER =
-  '[bridle] A voice client just connected to this session. The user is now hands-free: ' +
-  'their messages are transcribed speech (expect dictation quirks) and your replies are read ' +
-  'aloud by text-to-speech. Keep responses concise and conversational; avoid long code blocks, ' +
-  'tables, or ascii art unless asked; read commands and file paths clearly. Acknowledge in one ' +
-  'short sentence, then continue.';
+  '[bridle] This session is now reachable from the bridle phone client. From now on, any input ' +
+  'line prefixed with "bridle.voice:" is transcribed speech from the phone (expect dictation ' +
+  'quirks — homophones, missing punctuation) and any line prefixed with "bridle.text:" is typed ' +
+  'from the phone; a line with neither prefix is from the normal terminal session. When replying ' +
+  'to a bridle line, remember it may be read aloud by text-to-speech: keep it concise and ' +
+  'conversational, avoid long code blocks, tables, or ascii art unless asked, and read commands ' +
+  'and file paths clearly. Acknowledge in one short sentence, then continue.';
 
 /** @type {Record<string, any>} */
 const BUILTIN_PROFILES = {

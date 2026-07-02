@@ -97,7 +97,7 @@ export const ping = (ts) => ({ t: LINK.PING, ts });
 export const pong = (ts) => ({ t: LINK.PONG, ts });
 export const notice = (text, level = LEVEL.INFO) => ({ t: LINK.NOTICE, level, text });
 
-export const text = (s) => ({ t: LINK.TEXT, text: s });
+export const text = (s, source) => ({ t: LINK.TEXT, text: s, source });
 export const command = (name, arg) => ({ t: LINK.COMMAND, name, arg });
 export const listSessions = () => ({ t: LINK.LIST_SESSIONS });
 export const connectSession = (id) => ({ t: LINK.CONNECT_SESSION, id: id || null });
