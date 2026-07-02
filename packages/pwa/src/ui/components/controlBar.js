@@ -9,9 +9,16 @@
 import { dd } from '../../runtime.js';
 import { icon } from '../icon.js';
 
-const { alias, div, button, input, span } = dd;
+const { alias, div, button, span, h } = dd;
 
 const HOLD_MS = 320;
+const MAX_COMPOSER_PX = 140; // ~6 lines before it scrolls internally
+
+// Grow the textarea to fit its content (up to a cap), then let it scroll.
+const autoGrow = (el) => {
+  el.style.height = 'auto';
+  el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_PX)}px`;
+};
 
 export default alias(function (state) {
   const self = this;
@@ -27,6 +34,7 @@ export default alias(function (state) {
       fire('send-text', el.value.trim());
       el.value = '';
       syncMode();
+      autoGrow(el);
     }
   };
   const syncMode = () => {
@@ -74,10 +82,11 @@ export default alias(function (state) {
   const linked = state.connection === 'tethered';
   const placeholder = linked ? 'Message your agent…' : 'Not linked yet — messages send once connected';
   const composer = div({ className: `composer ${linked ? '' : 'unlinked'}`.trim(), 'data-mode': 'mic' },
-    input({ type: 'text', name: 'message', className: 'composer-input', placeholder, enterkeyhint: 'send' }).on({
-      $attach: (el) => { self._input = el; syncMode(); },
-      input: syncMode,
-      keydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } },
+    h('textarea', { name: 'message', className: 'composer-input', placeholder, rows: '1', enterkeyhint: 'send' }).on({
+      $attach: (el) => { self._input = el; syncMode(); autoGrow(el); },
+      input: (e) => { syncMode(); autoGrow(e.target); },
+      // Enter sends; Shift+Enter (and IME composition) inserts a newline.
+      keydown: (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } },
     }),
     fab,
   ).on({

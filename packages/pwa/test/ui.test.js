@@ -85,7 +85,7 @@ test('controlBar shows "Thinking…" while awaiting the agent reply', async () =
 
 test('messageList badges a message held for the next turn', async () => {
   const messageList = (await import('../src/ui/components/messageList.js')).default;
-  const root = mount(messageList([{ id: 'q1', role: 'user', content: 'and one more thing', queued: true }]));
+  const root = mount(messageList({ conversation: true, messages: [{ id: 'q1', role: 'user', content: 'and one more thing', ts: Date.now(), queued: true }] }));
   expect(root.querySelector('.msg.queued')).toBeTruthy();
   expect(root.querySelector('.queued-tag')?.textContent).toContain('queued');
 });
@@ -105,15 +105,25 @@ test('sessionsSheet is honest about link state', async () => {
 
 test('messageList shows honest delivery state on user messages', async () => {
   const messageList = (await import('../src/ui/components/messageList.js')).default;
-  const root = mount(messageList([
-    { id: 'a', role: 'user', content: 'not delivered', delivery: 'pending' },
-    { id: 'b', role: 'user', content: 'on the wire', delivery: 'sent' },
-    { id: 'c', role: 'user', content: 'agent has it', delivery: 'read' },
-    { id: 'd', role: 'assistant', content: 'reply' },
-  ]));
+  const ts = Date.now();
+  const root = mount(messageList({ conversation: true, messages: [
+    { id: 'a', role: 'user', content: 'not delivered', ts, delivery: 'pending' },
+    { id: 'b', role: 'user', content: 'on the wire', ts, delivery: 'sent' },
+    { id: 'c', role: 'user', content: 'agent has it', ts, delivery: 'read' },
+    { id: 'd', role: 'assistant', content: 'reply', ts },
+  ] }));
   expect(root.querySelector('.msg.user .delivery.pending')).toBeTruthy();
   expect(root.querySelector('.msg.user .delivery.sent')).toBeTruthy();
   expect(root.querySelector('.msg.user .delivery.read')).toBeTruthy();
   // Assistant messages never get a delivery receipt.
   expect(root.querySelector('.msg.assistant .delivery')).toBeFalsy();
+});
+
+test('messageList reads a message aloud on tap only outside hands-free mode', async () => {
+  const messageList = (await import('../src/ui/components/messageList.js')).default;
+  const msgs = [{ id: 'r1', role: 'assistant', content: 'hello there', ts: Date.now() }];
+  const textMode = mount(messageList({ conversation: false, messages: msgs }));
+  expect(textMode.querySelector('.speak-btn')).toBeTruthy();
+  const handsFree = mount(messageList({ conversation: true, messages: msgs }));
+  expect(handsFree.querySelector('.speak-btn')).toBeFalsy();
 });

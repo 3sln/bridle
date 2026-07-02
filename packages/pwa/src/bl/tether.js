@@ -258,9 +258,14 @@ export class TetherQuery extends Query {
       if (last && last.role === 'assistant') last.done = true;
     };
 
+    // Replies (and questions/forms) are read aloud automatically ONLY in hands-free
+    // conversation mode; in text mode nothing auto-speaks — the user taps a message's
+    // speaker to play it. `autoSpeak` is the user's on/off toggle within that.
+    const autoSpeakOn = () => state.conversation && settings.get('autoSpeak');
+
     // --- streaming TTS: speak whole sentences as output arrives --------------
     const speakChunk = (chunk) => {
-      if (!settings.get('autoSpeak')) return;
+      if (!autoSpeakOn()) return;
       speakBuffer += chunk;
       const idx = lastBoundary(speakBuffer);
       if (idx > 0) {
@@ -272,7 +277,7 @@ export class TetherQuery extends Query {
     };
     const flushSpeak = () => {
       clearTimeout(flushTimer);
-      if (settings.get('autoSpeak') && speakBuffer.trim()) tts.speak(speakBuffer);
+      if (autoSpeakOn() && speakBuffer.trim()) tts.speak(speakBuffer);
       speakBuffer = '';
     };
 
@@ -504,11 +509,11 @@ export class TetherQuery extends Query {
           break;
         case LINK.ASK:
           push({ ask: { id: msg.id, question: msg.question, choices: msg.choices } });
-          if (settings.get('autoSpeak')) tts.speak(msg.question, { remember: false });
+          if (autoSpeakOn()) tts.speak(msg.question, { remember: false });
           break;
         case LINK.FORM:
           push({ form: { id: msg.id, html: msg.html, title: msg.title, submit: msg.submit } });
-          if (settings.get('autoSpeak')) tts.speak(msg.title ? `Form: ${msg.title}` : 'The agent sent you a form.', { remember: false });
+          if (autoSpeakOn()) tts.speak(msg.title ? `Form: ${msg.title}` : 'The agent sent you a form.', { remember: false });
           break;
         case LINK.ASSET_BEGIN:
           incomingAsset = { ...msg, chunks: [], received: 0 };
@@ -756,6 +761,12 @@ export class TetherQuery extends Query {
         case 'stop-speaking':
           tts.cancel();
           break;
+        case 'speak-message':
+          if (it.text) {
+            tts.cancel();
+            tts.speak(it.text, { remember: false });
+          }
+          break;
         case 'repeat':
           tts.repeat();
           break;
@@ -910,6 +921,15 @@ export class ToggleListeningAction extends IntentOnly {
 }
 export class StopSpeakingAction extends IntentOnly {
   intent = { type: 'stop-speaking' };
+}
+export class SpeakMessageAction extends Action {
+  constructor(text) {
+    super();
+    this.text = text;
+  }
+  execute(_, { engineFeed }) {
+    emit(engineFeed, { type: 'speak-message', text: this.text });
+  }
 }
 export class RepeatAction extends IntentOnly {
   intent = { type: 'repeat' };

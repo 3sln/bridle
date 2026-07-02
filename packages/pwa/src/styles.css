@@ -114,13 +114,14 @@ body {
   list-style: none; margin: 0; padding: 18px 14px 8px; flex: 1; min-height: 0;
   overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
 }
-.msg { display: flex; animation: rise .22s ease both; }
+.msg { display: flex; align-items: flex-end; gap: 6px; animation: rise .22s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(7px); } }
 .msg .bubble {
-  max-width: 82%; padding: 10px 14px; border-radius: 18px;
-  white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.45;
-  box-shadow: var(--shadow-sm);
+  max-width: 82%; padding: 8px 12px 6px; border-radius: 18px;
+  font-size: 15px; line-height: 1.45; box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column;
 }
+.bubble-text { white-space: pre-wrap; word-break: break-word; }
 .msg.user { justify-content: flex-end; }
 .msg.user .bubble { background: var(--grad); color: #fff; border-bottom-right-radius: 5px; }
 .msg.assistant .bubble { background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
@@ -136,11 +137,32 @@ body {
 .msg.queued { opacity: .6; }
 .msg.queued .bubble { background: var(--grad); filter: saturate(.6) brightness(.85); box-shadow: none; }
 .msg .queued-tag { color: var(--amber); }
-/* Per-message delivery receipt (user messages). */
-.msg .delivery { align-self: flex-end; margin: 2px 4px 0 0; color: var(--faint); display: inline-flex; }
-.msg .delivery .msym { font-size: 14px; }
-.msg .delivery.pending { color: var(--amber); }
-.msg .delivery.read { color: var(--accent-2); }
+
+/* Time + delivery receipt inside the bubble (WhatsApp-style, bottom-right). */
+.msg .meta { align-self: flex-end; display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 10.5px; line-height: 1; }
+.msg.assistant .meta, .msg.system .meta { color: var(--faint); }
+.msg.user .meta { color: rgba(255, 255, 255, .82); }
+.msg .meta .delivery { display: inline-flex; }
+.msg .meta .delivery .msym { font-size: 13px; }
+.msg .meta .delivery.pending { color: var(--amber); }
+.msg.user .meta .delivery.read { color: #fff; }
+
+/* Sticky date separators between days. */
+.date-sep { align-self: center; position: sticky; top: 4px; z-index: 3; }
+.date-sep span {
+  display: inline-block; background: var(--panel-2); color: var(--muted);
+  font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 999px;
+  border: 1px solid var(--line-soft); box-shadow: var(--shadow-sm);
+}
+
+/* Tap-to-play speaker on each message (shown outside hands-free mode). */
+.speak-btn {
+  appearance: none; border: 0; background: transparent; color: var(--faint);
+  cursor: pointer; padding: 2px; align-self: flex-end; display: grid; place-items: center;
+  opacity: .55; transition: opacity .15s, color .15s;
+}
+.speak-btn:hover { opacity: 1; color: var(--text); }
+.speak-btn .msym { font-size: 18px; }
 
 /* ---- mic meter --------------------------------------------------------- */
 .meter { height: 3px; background: transparent; margin: 0 16px; border-radius: 2px; overflow: hidden; opacity: 0; transition: opacity .25s; }
@@ -162,9 +184,10 @@ body {
 .composer.unlinked .composer-input { border-color: rgba(124, 92, 255, .4); }
 .composer.unlinked .composer-input::placeholder { color: var(--accent-2); }
 .composer-input {
-  flex: 1; min-height: 46px; padding: 12px 16px; border-radius: 23px;
+  flex: 1; min-height: 46px; max-height: 140px; padding: 11px 16px; border-radius: 20px;
   border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
-  font-size: 16px; font-family: inherit; resize: none; transition: border-color .15s, box-shadow .15s;
+  font-size: 16px; line-height: 1.35; font-family: inherit; resize: none; overflow-y: auto;
+  display: block; transition: border-color .15s, box-shadow .15s;
 }
 .composer-input::placeholder { color: var(--faint); }
 .composer-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124, 92, 255, .16); }
