@@ -114,7 +114,7 @@ export async function runServer(buildEngine, { ui } = {}) {
   let watcher = null;
   try {
     watcher = watch(configDir(), (_evt, file) => {
-      if (file && !/tethers\.json|setups\.json/.test(file)) return;
+      if (file && !/tethers\.touch/.test(file)) return;
       clearTimeout(debounce);
       debounce = setTimeout(() => reconcile().catch(() => {}), DEBOUNCE_MS);
     });
