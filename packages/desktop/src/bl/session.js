@@ -77,8 +77,10 @@ export class SessionQuery extends Query {
       notify({ ...state });
     };
 
-    let outBuffer = ''; // agent output produced before a channel is open
+    let outBuffer = ''; // agent output produced while no phone is connected (replayed on reconnect)
+    let attached = false; // have we attached an agent session for this tether yet?
     let peer = null; // the live HostPeer for the current connection
+    const OUT_BUFFER_MAX = 256 * 1024; // keep the tail of a long reply across a disconnect
     // Incoming form-file uploads: bytes are streamed to a temp file so a big
     // upload never sits in memory or crosses into the agent's context.
     const formFiles = new Map(); // formId -> [{ field, name, path, size, mime }]
@@ -106,8 +108,13 @@ export class SessionQuery extends Query {
     push({ agentState: 'running' });
     onBase(agent, 'output', (e) => {
       const { text, stream } = e.detail;
-      // Only stream to a verified peer; otherwise buffer until one authenticates.
-      if (!(authed && peer && peer.send(output(text, stream)))) outBuffer += text;
+      // Only stream to a verified peer; otherwise buffer until one reconnects, so
+      // a reply produced while the phone was away isn't lost. Keep only the tail
+      // of a very long buffered reply.
+      if (!(authed && peer && peer.send(output(text, stream)))) {
+        outBuffer += text;
+        if (outBuffer.length > OUT_BUFFER_MAX) outBuffer = outBuffer.slice(-OUT_BUFFER_MAX);
+      }
       echo('agent-output', { text, stream });
     });
     onBase(agent, 'exit', (e) => {
@@ -210,10 +217,17 @@ export class SessionQuery extends Query {
         outBuffer = '';
       }
       frontend.attach(peer); // the agent's MCP tools now reach this phone
-      // First connect: start fresh (never silently resume an unrelated chat).
-      // Reconnects: continue whatever session this tether was already on, so a
-      // network blip doesn't drop you into a new conversation mid-task.
-      await attachSession(currentSessionId || undefined);
+      if (!attached) {
+        // First connect: start fresh (never silently resume an unrelated chat).
+        attached = true;
+        await attachSession(currentSessionId || undefined);
+      } else if (currentSessionId) {
+        // Reconnect (e.g. a backgrounded tab returning): the agent kept its
+        // session and its output was buffered — just re-tell the phone which
+        // session it's on, without re-attaching or re-priming. Seamless resume.
+        const title = sessionTitles.get(currentSessionId) || shortId(currentSessionId);
+        peer.send(mkSession(currentSessionId, title, true));
+      }
       // Replay anything the phone sent between HELLO and admission (e.g. an
       // outbox flush) — it was held, not dropped, so no first message is lost.
       const held = preAuth.splice(0);

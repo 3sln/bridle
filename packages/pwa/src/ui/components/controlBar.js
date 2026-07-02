@@ -79,7 +79,9 @@ export default alias(function (state) {
     pointerleave: () => { clearTimeout(holdTimer); if (holding) { holding = false; suppressClick = true; fire('ptt-up'); } },
   });
 
-  const linked = state.connection === 'tethered';
+  // A brief reconnect is transparent (only the status bead shows it) — the server
+  // holds our session and buffers replies, so the composer stays usable.
+  const linked = state.connection === 'tethered' || state.connection === 'reconnecting';
   const placeholder = linked ? 'Message your agent…' : 'Not linked yet — messages send once connected';
   const composer = div({ className: `composer ${linked ? '' : 'unlinked'}`.trim(), 'data-mode': 'mic' },
     h('textarea', { name: 'message', className: 'composer-input', placeholder, rows: '1', enterkeyhint: 'send' }).on({
@@ -97,11 +99,11 @@ export default alias(function (state) {
   return div({ className: 'controls' }, composer);
 });
 
-const LINK_STATUS = { waiting: 'Waiting for desktop…', reconnecting: 'Reconnecting…', negotiating: 'Linking…', connecting: 'Connecting…' };
+// A genuinely-absent desktop is surfaced; a transient reconnect is left to the
+// status bead so the conversation view doesn't flicker on a backgrounded tab.
+const LINK_STATUS = { waiting: 'Waiting for desktop…', negotiating: 'Linking…', connecting: 'Connecting…' };
 
 function conversationBar(state, fire) {
-  // A dropped/linking tether takes priority — don't imply we're listening to the
-  // agent when nothing's on the other end.
   const linkMsg = state.connection !== 'tethered' && (LINK_STATUS[state.connection] || null);
   const status = linkMsg ? linkMsg
     : state.speaking ? 'Speaking…'

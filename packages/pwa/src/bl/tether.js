@@ -487,14 +487,19 @@ export class TetherQuery extends Query {
         case LINK.SESSIONS:
           push({ sessions: msg.sessions || [], currentSession: findSession(msg.sessions, msg.currentId), sessionsOpen: true, sessionsLoading: false });
           break;
-        case LINK.SESSION:
+        case LINK.SESSION: {
+          // On reconnect the desktop re-announces the SAME session — that's a
+          // seamless resume, so don't clear the transcript or add noise for it.
+          const sameSession = state.currentSession && state.currentSession.id === msg.id;
           markAssistantDone();
-          // A fresh conversation starts from a clean transcript.
-          if (!msg.resumed) state.messages = [];
+          if (!msg.resumed) state.messages = []; // a genuinely fresh conversation
           push({ currentSession: { id: msg.id, title: msg.title }, sessionsOpen: false });
-          addMessage('system', msg.resumed ? `resumed ${msg.title}` : 'new conversation', 'status');
+          if (!sameSession) {
+            addMessage('system', msg.resumed ? `resumed ${msg.title}` : 'new conversation', 'status');
+          }
           updateNowPlaying();
           break;
+        }
 
         // --- front-end control (agent MCP tools) ---
         case LINK.SPEAK:
