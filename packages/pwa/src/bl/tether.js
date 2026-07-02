@@ -85,6 +85,7 @@ export class TetherQuery extends Query {
       sessions: [], // resumable agent sessions (when listed)
       currentSession: null, // { id, title }
       sessionsOpen: false,
+      sessionsLoading: false, // awaiting the desktop's session list
       statusLine: '', // transient agent status (set_status)
       toast: null, // { text, level } notice
       ask: null, // { id, question, choices } pending prompt
@@ -476,7 +477,7 @@ export class TetherQuery extends Query {
           }
           break;
         case LINK.SESSIONS:
-          push({ sessions: msg.sessions || [], currentSession: findSession(msg.sessions, msg.currentId), sessionsOpen: true });
+          push({ sessions: msg.sessions || [], currentSession: findSession(msg.sessions, msg.currentId), sessionsOpen: true, sessionsLoading: false });
           break;
         case LINK.SESSION:
           markAssistantDone();
@@ -784,10 +785,19 @@ export class TetherQuery extends Query {
           push({ sheetOpen: !!it.open });
           break;
         case 'list-sessions':
-          peer?.send(mkListSessions());
+          // Open the picker straight away so the button always responds; request
+          // the list if we can, otherwise the sheet explains we're not linked.
+          push({ sessionsOpen: true, sessionsLoading: canDeliver() });
+          if (canDeliver()) {
+            peer.send(mkListSessions());
+          }
           break;
         case 'connect-session':
-          peer?.send(mkConnectSession(it.id || null));
+          if (!canDeliver()) {
+            showToast('Not linked to your desktop yet — connect first.', 'error');
+            break;
+          }
+          peer.send(mkConnectSession(it.id || null));
           break;
         case 'set-sessions-sheet':
           push({ sessionsOpen: !!it.open });

@@ -90,6 +90,19 @@ test('messageList badges a message held for the next turn', async () => {
   expect(root.querySelector('.queued-tag')?.textContent).toContain('queued');
 });
 
+test('sessionsSheet is honest about link state', async () => {
+  const sessionsSheet = (await import('../src/ui/components/sessionsSheet.js')).default;
+  const disconnected = mount(sessionsSheet({ connection: 'waiting', sessions: [] }));
+  expect(disconnected.textContent).toContain('Connect to your desktop');
+  expect(disconnected.querySelector('.btn.big')?.disabled).toBe(true);
+
+  const loading = mount(sessionsSheet({ connection: 'tethered', sessionsLoading: true, sessions: [] }));
+  expect(loading.textContent).toContain('Loading conversations…');
+
+  const withList = mount(sessionsSheet({ connection: 'tethered', sessions: [{ id: 's1', title: 'fix the build' }] }));
+  expect(withList.querySelector('.session-title')?.textContent).toContain('fix the build');
+});
+
 test('messageList shows honest delivery state on user messages', async () => {
   const messageList = (await import('../src/ui/components/messageList.js')).default;
   const root = mount(messageList([

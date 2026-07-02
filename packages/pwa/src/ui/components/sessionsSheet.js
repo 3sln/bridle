@@ -10,12 +10,14 @@ export default alias(function (state) {
   const fire = (type, detail) => self.dispatchEvent(new CustomEvent(type, { bubbles: true, detail }));
   const close = () => fire('close-sessions');
   const list = state.sessions || [];
+  const connected = state.connection === 'tethered';
+  const loading = !!state.sessionsLoading;
 
-  return div({ className: 'sheet-backdrop' },
-    div({ className: 'sheet' },
-      div({ className: 'sheet-head' }, span('Conversations'), button({ className: 'btn ghost' }, 'Done').on({ click: close })),
-      button({ className: 'btn big' }, icon('add_comment'), 'New conversation').on({ click: () => fire('new-session') }),
-      list.length
+  const body = !connected
+    ? p({ className: 'hint' }, 'Connect to your desktop to see its earlier conversations.')
+    : loading
+      ? p({ className: 'hint loading' }, icon('sync', 'spin'), 'Loading conversations…')
+      : list.length
         ? ul({ className: 'session-list' },
             list.map((s, i) =>
               li({ className: `session ${state.currentSession && state.currentSession.id === s.id ? 'current' : ''}`, tabindex: '0', role: 'button' },
@@ -30,7 +32,13 @@ export default alias(function (state) {
               }).key(s.id),
             ),
           )
-        : p({ className: 'hint' }, 'No earlier conversations for this project yet.'),
+        : p({ className: 'hint' }, 'No earlier conversations for this project yet.');
+
+  return div({ className: 'sheet-backdrop' },
+    div({ className: 'sheet' },
+      div({ className: 'sheet-head' }, span('Conversations'), button({ className: 'btn ghost' }, 'Done').on({ click: close })),
+      button({ className: 'btn big', disabled: !connected }, icon('add_comment'), 'New conversation').on({ click: () => fire('new-session') }),
+      body,
       p({ className: 'hint' }, `Say "${(state.settings && state.settings.commandLeadIn) || 'bridle'} session 2" to switch by voice.`),
     ),
   ).on({

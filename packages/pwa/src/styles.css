@@ -78,6 +78,9 @@ body {
 .status .dot.waiting { background: var(--accent); box-shadow: 0 0 0 3px rgba(124, 92, 255, .18); animation: blink 1.6s ease-in-out infinite; }
 .status .dot.error { background: var(--red); }
 @keyframes blink { 50% { opacity: .35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hint.loading { display: inline-flex; align-items: center; gap: 6px; }
+.hint.loading .spin { animation: spin 1s linear infinite; font-size: 16px; }
 
 .status-label { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .tether-chip {
