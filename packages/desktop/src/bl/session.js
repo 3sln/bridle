@@ -32,6 +32,7 @@ import { answer as mkAnswer } from '@bridle/protocol/signaling';
 import { fingerprintJwk, verifySignature } from '@bridle/protocol/identity';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import { McpServer } from '../mcp.js';
 
 export const PHASE = Object.freeze({
@@ -84,6 +85,8 @@ export class SessionQuery extends Query {
     // Incoming form-file uploads: bytes are streamed to a temp file so a big
     // upload never sits in memory or crosses into the agent's context.
     const formFiles = new Map(); // formId -> [{ field, name, path, size, mime }]
+    const pendingAttachments = []; // files the phone attached, referenced on the next message
+    const attachDir = () => join(config.agent.cwd || process.cwd(), '.bridle', 'attachments');
     let activeUpload = null;
     const takeFormFiles = (id) => {
       const f = formFiles.get(id) || [];
@@ -300,10 +303,15 @@ export class SessionQuery extends Query {
         }
         case LINK.TEXT: {
           // Tag the line so the (primed) agent knows it's from the phone and
-          // whether it was spoken or typed.
+          // whether it was spoken or typed. Any files attached since the last
+          // message are referenced by path so the agent can read them.
           const prefix = msg.source === 'voice' ? 'bridle.voice: ' : 'bridle.text: ';
-          const line = prefix + msg.text.replace(/\n+$/, '');
-          agent.write(line + '\n');
+          let body = msg.text.replace(/\n+$/, '');
+          if (pendingAttachments.length) {
+            body += `${body ? '\n' : ''}[attached files — read them if relevant: ${pendingAttachments.join(', ')}]`;
+            pendingAttachments.length = 0;
+          }
+          agent.write(prefix + body + '\n');
           echo('guest-input', { text: msg.text });
           break;
         }
@@ -343,6 +351,22 @@ export class SessionQuery extends Query {
           // The phone sends the text fields; any uploaded files were streamed
           // separately and saved to disk here, so we merge their paths in.
           frontend.resolveForm(msg.id, msg.values == null ? null : { values: msg.values, files: takeFormFiles(msg.id) });
+          break;
+        case LINK.ATTACH_BEGIN: {
+          const safe = String(msg.name || 'file').replace(/[^\w.-]/g, '_').slice(-80) || 'file';
+          const dir = attachDir();
+          await mkdir(dir, { recursive: true }).catch(() => {});
+          const path = join(dir, `${Date.now()}-${safe}`);
+          activeUpload = { id: msg.id, kind: 'attachment', name: msg.name || safe, mime: msg.mime, path, size: 0, writer: Bun.file(path).writer() };
+          break;
+        }
+        case LINK.ATTACH_END:
+          if (activeUpload && activeUpload.kind === 'attachment' && activeUpload.id === msg.id) {
+            await activeUpload.writer.end();
+            pendingAttachments.push(activeUpload.path);
+            echo('agent-output', { text: `\n[bridle] received attachment: ${activeUpload.path}\n`, stream: 'stderr' });
+            activeUpload = null;
+          }
           break;
         case LINK.PING:
           peer?.send(pong(msg.ts));

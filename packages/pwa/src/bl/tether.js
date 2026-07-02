@@ -19,6 +19,8 @@ import {
   formReply as mkFormReply,
   formFileBegin as mkFormFileBegin,
   formFileEnd as mkFormFileEnd,
+  attachBegin as mkAttachBegin,
+  attachEnd as mkAttachEnd,
 } from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
@@ -68,6 +70,7 @@ export class TetherQuery extends Query {
       speaking: false,
       processing: false, // transcribing an utterance on-device
       awaitingReply: false, // sent input; the agent is working on this turn
+      attachments: [], // { id, name, size, file } staged to send with the next message
       sttState: 'idle', // idle | loading | ready | error
       sttProgress: null, // 0..100 when totals are known; null = indeterminate
       sttBytes: 0, // bytes downloaded so far (always known, monotonic)
@@ -237,6 +240,25 @@ export class TetherQuery extends Query {
       outQueue.forEach((m) => { m.queued = false; m.delivery = 'sent'; });
       outQueue.length = 0;
       return { text: combined, source };
+    }
+
+    // Stream staged attachments to the desktop (which saves them to a folder and
+    // references the paths to the agent on the next message). Ordered before the
+    // text send, so the desktop has them pending when the message lands.
+    // (UPLOAD_CHUNK is defined once below, shared with form-file uploads.)
+    let attachSeq = 0;
+    async function uploadAttachments() {
+      const staged = state.attachments.slice();
+      if (!staged.length) return;
+      for (const a of staged) {
+        peer?.send(mkAttachBegin(a.id, { name: a.name, mime: a.file.type, size: a.size }));
+        const buf = new Uint8Array(await a.file.arrayBuffer());
+        for (let o = 0; o < buf.length; o += UPLOAD_CHUNK) {
+          peer?.sendBinary(buf.subarray(o, o + UPLOAD_CHUNK));
+        }
+        peer?.send(mkAttachEnd(a.id));
+      }
+      push({ attachments: [] });
     }
 
     // --- messages -----------------------------------------------------------
@@ -746,16 +768,35 @@ export class TetherQuery extends Query {
     function onIntent(e) {
       const it = e.detail || {};
       switch (it.type) {
-        case 'send-text':
-          if (it.text && it.text.trim()) {
-            if (state.ask) {
-              peer?.send(mkAskReply(state.ask.id, it.text));
-              addMessage('user', it.text, 'answer');
-              push({ ask: null });
+        case 'send-text': {
+          const typed = (it.text || '').trim();
+          if (!typed && !state.attachments.length) break;
+          if (state.ask) {
+            peer?.send(mkAskReply(state.ask.id, typed));
+            addMessage('user', typed, 'answer');
+            push({ ask: null });
+          } else {
+            const names = state.attachments.map((a) => a.name).join(', ');
+            const display = typed || `📎 ${names}`;
+            // Stream the files first so the desktop has them pending BEFORE the
+            // text lands (the channel is ordered, but the upload is async).
+            if (state.attachments.length && canDeliver()) {
+              uploadAttachments().then(() => queueOrSend(display, undefined, 'text')).catch(() => {});
             } else {
-              queueOrSend(it.text, undefined, 'text'); // typed
+              queueOrSend(display, undefined, 'text');
             }
           }
+          break;
+        }
+        case 'attach-files': {
+          const added = (it.files || []).map((file) => ({ id: `${nonce}-att-${++attachSeq}`, name: file.name, size: file.size, file }));
+          if (added.length) {
+            push({ attachments: [...state.attachments, ...added] });
+          }
+          break;
+        }
+        case 'remove-attachment':
+          push({ attachments: state.attachments.filter((a) => a.id !== it.id) });
           break;
         case 'toggle-conversation':
           state.conversation ? stopConversation() : startConversation();
@@ -911,6 +952,24 @@ export class SendTextAction extends Action {
   }
   execute(_, { engineFeed }) {
     emit(engineFeed, { type: 'send-text', text: this.text });
+  }
+}
+export class AttachFilesAction extends Action {
+  constructor(files) {
+    super();
+    this.files = files;
+  }
+  execute(_, { engineFeed }) {
+    emit(engineFeed, { type: 'attach-files', files: this.files });
+  }
+}
+export class RemoveAttachmentAction extends Action {
+  constructor(id) {
+    super();
+    this.id = id;
+  }
+  execute(_, { engineFeed }) {
+    emit(engineFeed, { type: 'remove-attachment', id: this.id });
   }
 }
 class IntentOnly extends Action {

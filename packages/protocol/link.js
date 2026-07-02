@@ -32,6 +32,8 @@ export const LINK = Object.freeze({
   FORM_REPLY: 'form-reply', // { t, id, values }     submitted form values (or null = cancelled)
   FORM_FILE_BEGIN: 'form-file-begin', // { t, id, field, name, mime, size }  upload starts; binary chunks follow
   FORM_FILE_END: 'form-file-end', // { t, id, field }                        upload done
+  ATTACH_BEGIN: 'attach-begin', // { t, id, name, mime, size }  a file/image the user attached; binary chunks follow
+  ATTACH_END: 'attach-end', // { t, id }                        saved to disk; referenced to the agent on the next message
 
   // host (desktop) -> guest (phone)
   OUTPUT: 'output', // { t, text, stream }   agent stdout/stderr chunk
@@ -117,6 +119,8 @@ export const form = (id, html, { title, submit } = {}) => ({ t: LINK.FORM, id, h
 export const formReply = (id, values) => ({ t: LINK.FORM_REPLY, id, values: values || null });
 export const formFileBegin = (id, field, { name, mime, size } = {}) => ({ t: LINK.FORM_FILE_BEGIN, id, field, name: name || 'upload', mime: mime || 'application/octet-stream', size: size || 0 });
 export const formFileEnd = (id, field) => ({ t: LINK.FORM_FILE_END, id, field });
+export const attachBegin = (id, { name, mime, size } = {}) => ({ t: LINK.ATTACH_BEGIN, id, name: name || 'file', mime: mime || 'application/octet-stream', size: size || 0 });
+export const attachEnd = (id) => ({ t: LINK.ATTACH_END, id });
 export const assetBegin = (id, kind, name, mime, size, meta) => ({ t: LINK.ASSET_BEGIN, id, kind, name, mime, size, meta: meta || {} });
 export const assetEnd = (id) => ({ t: LINK.ASSET_END, id });
 

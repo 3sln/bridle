@@ -83,7 +83,17 @@ export default alias(function (state) {
   // holds our session and buffers replies, so the composer stays usable.
   const linked = state.connection === 'tethered' || state.connection === 'reconnecting';
   const placeholder = linked ? 'Message your agent…' : 'Not linked yet — messages send once connected';
+
+  // Paperclip: a hidden file input inside a label opens the picker on tap.
+  const attach = h('label', { className: 'attach-btn', title: 'Attach files', 'aria-label': 'Attach files' },
+    icon('add_photo_alternate'),
+    h('input', { type: 'file', multiple: true, className: 'attach-input', accept: 'image/*,*/*' }).on({
+      change: (e) => { const files = [...e.target.files]; if (files.length) fire('attach-files', { files }); e.target.value = ''; },
+    }),
+  );
+
   const composer = div({ className: `composer ${linked ? '' : 'unlinked'}`.trim(), 'data-mode': 'mic' },
+    attach,
     h('textarea', { name: 'message', className: 'composer-input', placeholder, rows: '1', enterkeyhint: 'send' }).on({
       $attach: (el) => { self._input = el; syncMode(); autoGrow(el); },
       input: (e) => { syncMode(); autoGrow(e.target); },
@@ -96,8 +106,21 @@ export default alias(function (state) {
     $update: syncMode,
   });
 
-  return div({ className: 'controls' }, composer);
+  const chips = state.attachments && state.attachments.length ? attachChips(state.attachments, fire) : null;
+  return div({ className: 'controls' }, chips, composer);
 });
+
+function attachChips(attachments, fire) {
+  return div({ className: 'attach-chips' },
+    attachments.map((a) =>
+      div({ className: 'attach-chip' },
+        icon('description', 'chip-ic'),
+        span({ className: 'chip-name' }, a.name),
+        button({ className: 'chip-x', 'aria-label': 'Remove attachment' }, icon('close')).on({ click: () => fire('remove-attachment', { id: a.id }) }),
+      ).key(a.id),
+    ),
+  );
+}
 
 // A genuinely-absent desktop is surfaced; a transient reconnect is left to the
 // status bead so the conversation view doesn't flicker on a backgrounded tab.

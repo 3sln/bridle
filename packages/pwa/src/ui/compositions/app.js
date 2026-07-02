@@ -6,6 +6,8 @@ import { dd, watch, fromQuery } from '../../runtime.js';
 import {
   TetherQuery,
   SendTextAction,
+  AttachFilesAction,
+  RemoveAttachmentAction,
   ToggleConversationAction,
   CancelVoicePrepAction,
   ToggleListeningAction,
@@ -56,6 +58,8 @@ export default function app(engine) {
 
   const handlers = {
     'send-text': (e) => go(new SendTextAction(e.detail)),
+    'attach-files': (e) => go(new AttachFilesAction(e.detail.files)),
+    'remove-attachment': (e) => go(new RemoveAttachmentAction(e.detail.id)),
     'toggle-conversation': () => go(new ToggleConversationAction()),
     'cancel-voice-prep': () => go(new CancelVoicePrepAction()),
     'toggle-listening': () => go(new ToggleListeningAction()),

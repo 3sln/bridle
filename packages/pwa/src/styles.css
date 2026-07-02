@@ -183,6 +183,27 @@ body {
 .composer { display: flex; align-items: flex-end; gap: 9px; }
 .composer.unlinked .composer-input { border-color: rgba(124, 92, 255, .4); }
 .composer.unlinked .composer-input::placeholder { color: var(--accent-2); }
+/* Attach (paperclip) button — a label hiding the file input. */
+.attach-btn {
+  flex: none; width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: var(--muted); border: 1px solid var(--line);
+  background: var(--bg-soft); transition: color .15s, border-color .15s;
+}
+.attach-btn:hover { color: var(--text); border-color: var(--accent); }
+.attach-btn .msym { font-size: 22px; }
+.attach-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* Staged attachment chips above the composer. */
+.attach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 220px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 6px 4px 10px; font-size: 12.5px; color: var(--text);
+}
+.attach-chip .chip-ic { font-size: 15px; color: var(--accent-2); }
+.attach-chip .chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-chip .chip-x { appearance: none; border: 0; background: transparent; color: var(--faint); cursor: pointer; display: grid; place-items: center; padding: 2px; }
+.attach-chip .chip-x:hover { color: var(--text); }
+.attach-chip .chip-x .msym { font-size: 15px; }
 .composer-input {
   flex: 1; min-height: 46px; max-height: 140px; padding: 11px 16px; border-radius: 20px;
   border: 1px solid var(--line); background: var(--bg-soft); color: var(--text);
