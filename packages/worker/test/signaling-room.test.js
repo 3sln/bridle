@@ -18,12 +18,22 @@ test('admits host then guest and announces the join', () => {
   expect(host.sent.some((m) => m.t === 'peer-join' && m.role === 'guest')).toBe(true);
 });
 
-test('rejects a duplicate role', () => {
+test('a newer peer supersedes the old one for a role', () => {
   const room = new SignalingRoom('abc123');
-  expect(room.add(fakePeer('host'))).toBe(true);
+  const host1 = fakePeer('host');
+  expect(room.add(host1)).toBe(true);
+
+  // The newcomer is admitted; the old host is evicted with the superseded code.
   const host2 = fakePeer('host');
-  expect(room.add(host2)).toBe(false);
-  expect(host2.closed.c).toBe(4001);
+  expect(room.add(host2)).toBe(true);
+  expect(host1.closed.c).toBe(4002);
+  expect(host2.sent.some((m) => m.t === 'joined')).toBe(true);
+
+  // The evicted socket's later close must NOT announce a false peer-leave.
+  const guest = fakePeer('guest');
+  room.add(guest);
+  room.remove(host1);
+  expect(guest.sent.some((m) => m.t === 'peer-leave')).toBe(false);
 });
 
 test('relays signal payloads to the other peer only', () => {

@@ -11,7 +11,7 @@
 // powers the Node/Bun dev-server (and the tests).
 
 import { DurableObject } from 'cloudflare:workers';
-import { SIGNAL, ROLE, error, joined, peerJoin, peerLeave } from '@bridle/protocol/signaling';
+import { SIGNAL, ROLE, CLOSE, error, joined, peerJoin, peerLeave } from '@bridle/protocol/signaling';
 
 export class BridleRoom extends DurableObject {
   async fetch(request) {
@@ -28,16 +28,20 @@ export class BridleRoom extends DurableObject {
     this.ctx.acceptWebSocket(server, [role]);
     server.serializeAttachment({ role, code });
 
-    // One host + one guest per room.
-    const sameRole = this.ctx.getWebSockets(role).filter((ws) => ws !== server);
-    if (sameRole.length) {
-      send(server, error('role-taken', `role ${role} already present in room ${code}`));
+    // Newest connection for a role wins: evict any older same-role socket (a
+    // returning phone whose old socket lingered) instead of rejecting the new
+    // one. Flag the evicted socket so its close doesn't announce a peer-leave —
+    // it's being replaced, not truly departing.
+    for (const old of this.ctx.getWebSockets(role)) {
+      if (old === server) continue;
+      const att = old.deserializeAttachment() || {};
+      old.serializeAttachment({ ...att, superseded: true });
+      send(old, error('superseded', `a newer ${role} connected to room ${code}`));
       try {
-        server.close(4001, 'role-taken');
+        old.close(CLOSE.SUPERSEDED, 'superseded');
       } catch {
         /* noop */
       }
-      return new Response(null, { status: 101, webSocket: client });
     }
 
     send(server, joined(code, role, this.#roles()));
@@ -77,16 +81,24 @@ export class BridleRoom extends DurableObject {
   }
 
   #announceLeave(ws) {
-    const role = ws.deserializeAttachment()?.role;
+    const att = ws.deserializeAttachment();
+    if (att?.superseded) return; // replaced by a newer connection — not a real leave
     const other = this.#other(ws);
-    if (other && role) send(other, peerLeave(role));
+    if (other && att?.role) send(other, peerLeave(att.role));
   }
 
+  // The live socket of the opposite role (ignoring any superseded leftover).
   #other(ws) {
-    return this.ctx.getWebSockets().find((s) => s !== ws);
+    const mine = ws.deserializeAttachment()?.role;
+    const otherRole = mine === ROLE.HOST ? ROLE.GUEST : ROLE.HOST;
+    return this.ctx.getWebSockets(otherRole).find((s) => !s.deserializeAttachment()?.superseded) || null;
   }
   #roles() {
-    return this.ctx.getWebSockets().map((s) => s.deserializeAttachment()?.role).filter(Boolean);
+    return this.ctx
+      .getWebSockets()
+      .filter((s) => !s.deserializeAttachment()?.superseded)
+      .map((s) => s.deserializeAttachment()?.role)
+      .filter(Boolean);
   }
 }
 

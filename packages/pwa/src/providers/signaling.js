@@ -3,7 +3,7 @@
 // in the URL so there's no join message.
 
 import { Provider } from '@3sln/ngin';
-import { SIGNAL } from '@bridle/protocol/signaling';
+import { SIGNAL, CLOSE } from '@bridle/protocol/signaling';
 
 export class SignalingClient extends EventTarget {
   constructor({ role = 'guest' } = {}) {
@@ -26,7 +26,10 @@ export class SignalingClient extends EventTarget {
     };
     this.ws.onclose = (e) => {
       this.emit('close', { code: e.code, reason: e.reason });
-      if (!this.closedByUs && e.code !== 4001 && e.code !== 4000) {
+      // Don't reconnect on a deliberate close, a bad room, or when superseded (a
+      // newer connection took the slot — reconnecting would just evict it).
+      const fatal = e.code === CLOSE.BAD_ROOM || e.code === CLOSE.ROLE_TAKEN || e.code === CLOSE.SUPERSEDED;
+      if (!this.closedByUs && !fatal) {
         const delay = Math.min(15000, 500 * 2 ** this.retry++);
         setTimeout(() => !this.closedByUs && this.connect(), delay);
       }

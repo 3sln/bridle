@@ -33,6 +33,15 @@ export const SIGNAL_KIND = Object.freeze({
 export const otherRole = (role) =>
   role === ROLE.HOST ? ROLE.GUEST : ROLE.HOST;
 
+// WebSocket close codes the relay uses. SUPERSEDED means a newer connection for
+// the same role took over — the old one must NOT reconnect (it would just evict
+// the new one back). BAD_ROOM is fatal; the rest reconnect with backoff.
+export const CLOSE = Object.freeze({
+  BAD_ROOM: 4000,
+  ROLE_TAKEN: 4001, // legacy: role busy (superseded now replaces this path)
+  SUPERSEDED: 4002,
+});
+
 // ---- message factories (keep call sites terse + typo-proof) -----------------
 
 export const join = (room, role) => ({ t: SIGNAL.JOIN, room, role });

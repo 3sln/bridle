@@ -5,7 +5,7 @@
 // Uses the global WebSocket (present in Bun, browsers, and Workers), so this
 // same shape works anywhere; only the URL differs.
 
-import { SIGNAL } from '@bridle/protocol/signaling';
+import { SIGNAL, CLOSE } from '@bridle/protocol/signaling';
 
 export class SignalingClient extends EventTarget {
   /** @param {{ url: string, room: string, role?: 'host'|'guest' }} opts */
@@ -31,12 +31,15 @@ export class SignalingClient extends EventTarget {
     };
     this.ws.onclose = (e) => {
       this.emit('close', { code: e.code, reason: e.reason });
-      if (this.closedByUs || e.code === 4000) return; // deliberate close, or bad room (fatal)
+      if (this.closedByUs || e.code === CLOSE.BAD_ROOM) return; // deliberate close, or bad room (fatal)
+      // Superseded: a newer host claimed this room (e.g. a fresh server instance).
+      // This one is obsolete — stop, don't fight for the slot.
+      if (e.code === CLOSE.SUPERSEDED) return;
       // 4001 = role taken. On the pair→daemon handoff the foreground still holds
       // the host slot for a moment; retry quickly (bounded) so the daemon claims
       // it the instant the foreground leaves, instead of giving up and stranding
       // the phone on "waiting for desktop".
-      if (e.code === 4001) {
+      if (e.code === CLOSE.ROLE_TAKEN) {
         if (this.roleRetries++ >= 40) return; // ~20s, then stop fighting for the slot
         setTimeout(() => !this.closedByUs && this.connect(), 500);
         return;

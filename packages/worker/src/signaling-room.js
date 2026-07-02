@@ -11,7 +11,7 @@
 // All WebRTC negotiation (offer/answer/ICE) happens in the peers; SDP is never
 // inspected here.
 
-import { SIGNAL, ROLE, otherRole, error, joined, peerJoin, peerLeave } from '@bridle/protocol/signaling';
+import { SIGNAL, ROLE, CLOSE, otherRole, error, joined, peerJoin, peerLeave } from '@bridle/protocol/signaling';
 
 export class SignalingRoom {
   /** @param {string} code */
@@ -26,22 +26,26 @@ export class SignalingRoom {
   }
 
   /**
-   * Admit a peer that has already declared its role. Returns false (and closes
-   * the peer) if the role slot is taken.
+   * Admit a peer that has already declared its role. The newest connection for a
+   * role SUPERSEDES any older one (a returning phone whose old socket lingered),
+   * so joining never fails on a stale occupant.
    */
   add(peer) {
     if (peer.role !== ROLE.HOST && peer.role !== ROLE.GUEST) {
       peer.send(error('bad-role', `unknown role: ${peer.role}`));
-      peer.close(4000, 'bad-role');
-      return false;
-    }
-    if (this.peers.has(peer.role)) {
-      peer.send(error('role-taken', `role ${peer.role} already present in room ${this.code}`));
-      peer.close(4001, 'role-taken');
+      peer.close(CLOSE.BAD_ROOM, 'bad-role');
       return false;
     }
 
+    // Claim the slot first, then evict the old occupant — so its close (which
+    // calls remove()) sees the slot already reassigned and stays quiet.
+    const old = this.peers.get(peer.role);
     this.peers.set(peer.role, peer);
+    if (old && old !== peer) {
+      old.send(error('superseded', `a newer ${peer.role} connected to room ${this.code}`));
+      old.close(CLOSE.SUPERSEDED, 'superseded');
+    }
+
     peer.send(joined(this.code, peer.role, [...this.peers.keys()]));
 
     // Tell the other side someone arrived (its cue to start/redo negotiation).
