@@ -16,7 +16,7 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { safeName, serverRunning, stopLegacyDaemon } from './registry.js';
+import { safeName, serverRunning, stopLegacyDaemon, configDir } from './registry.js';
 
 const SERVER_KEY = 'server';
 const LABEL = (key) => `com.3sln.bridle.${key}`;
@@ -205,11 +205,22 @@ WantedBy=default.target
 // tells the user to run `bridle daemonize` from a console they opened as admin —
 // where this same install runs elevated and succeeds. The task itself always
 // runs with a LIMITED token, so the agent never runs as admin.
+//
+// A scheduled task that launches the console binary directly pops a terminal
+// window at every logon and keeps it open for the life of the server. So the
+// task instead runs a tiny generated VBScript through `wscript` (which has no
+// console of its own) that starts the server with a hidden window — the server
+// runs truly in the background, no terminal.
+const vbsPath = (key) => join(configDir(), `bridle-${key}.vbs`);
 const taskScheduler = {
   async install(key, tail) {
     const task = TASK(key);
     const { exec, prefix } = selfCommand();
-    const tr = winCmdLine([exec, ...prefix, ...tail]);
+    const launcher = vbsPath(key);
+    // WScript.Shell.Run(cmd, 0, False): 0 = hidden window, False = don't wait.
+    const cmd = [exec, ...prefix, ...tail].map((t) => `""${t}""`).join(' ');
+    await writeFile(launcher, `CreateObject("WScript.Shell").Run "${cmd}", 0, False\r\n`);
+    const tr = winCmdLine(['wscript.exe', launcher]);
     const created = await run('schtasks', [
       '/Create', '/TN', task, '/TR', tr, '/SC', 'ONLOGON', '/RL', 'LIMITED', '/F',
     ]);
@@ -224,6 +235,7 @@ const taskScheduler = {
   async uninstall(key) {
     await run('schtasks', ['/End', '/TN', TASK(key)]).catch(() => {});
     await run('schtasks', ['/Delete', '/TN', TASK(key), '/F']).catch(() => {});
+    await rm(vbsPath(key), { force: true }).catch(() => {});
     return true;
   },
   async status(key) {

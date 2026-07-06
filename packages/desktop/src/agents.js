@@ -39,7 +39,11 @@ const BUILTIN_PROFILES = {
     label: 'Claude Code',
     aliases: ['claude', 'claude-code'],
     command: ['claude'],
-    mode: 'oneshot',
+    // One persistent process per session, driven over Claude Code's streaming-JSON
+    // stdio. This keeps the whole conversation in a single live process, so hooks,
+    // monitors, and session cleanup fire as they do interactively — and the reply
+    // streams back token-by-token (nicer for read-aloud) instead of arriving whole.
+    mode: 'stream-json',
     tier: 'enhanced',
     // Selectable run modes (extra flags): `bridle tether <name> claude --mode auto`.
     modes: {
@@ -49,10 +53,14 @@ const BUILTIN_PROFILES = {
       plan: ['--permission-mode', 'plan'], // plan-only, makes no changes
     },
     setsSessionId: true, // we choose the UUID
-    turn: ({ prompt, first, sessionId }) => ({
-      args: ['-p', ...(first ? ['--session-id', sessionId] : ['--resume', sessionId]), prompt],
-      stdinFromNull: true,
-    }),
+    stream: {
+      // Bidirectional NDJSON: partial messages give us streaming text deltas.
+      baseArgs: ['-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages'],
+      // Bind the process to a session: our own UUID on a fresh one, --resume otherwise.
+      sessionArgs: ({ first, sessionId }) => (first ? ['--session-id', sessionId] : ['--resume', sessionId]),
+      encode: (text) => JSON.stringify({ type: 'user', message: { role: 'user', content: text } }) + '\n',
+      interrupt: () => JSON.stringify({ type: 'control_request', request_id: 'bridle-interrupt', request: { subtype: 'interrupt' } }) + '\n',
+    },
     listSessions: (cwd) => claudeSessions(cwd),
     // Auto-wire bridle's MCP server so the agent can drive the phone front-end.
     mcpConfig: (url) => ({ mcpServers: { bridle: { type: 'http', url } } }),

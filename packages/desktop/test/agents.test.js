@@ -30,7 +30,7 @@ test('a custom pipe profile needs no templates', () => {
 test('resolves a known agent by id', () => {
   const p = resolveAgent({ id: 'claude' });
   expect(p.id).toBe('claude');
-  expect(p.mode).toBe('oneshot');
+  expect(p.mode).toBe('stream-json');
 });
 
 test('a bare known command maps to its tuned profile', () => {
@@ -43,12 +43,12 @@ test('an arbitrary command becomes a generic pipe profile', () => {
   expect(p.command).toEqual(['mytool', '--flag']);
 });
 
-test('claude threads an explicit session id: create then resume', () => {
+test('claude binds a streaming process to an explicit session: create then resume', () => {
   const claude = resolveAgent({ id: 'claude' });
-  const create = claude.turn({ prompt: 'hi', first: true, sessionId: 'abc-123' });
-  expect(create.args).toEqual(['-p', '--session-id', 'abc-123', 'hi']);
-  const resume = claude.turn({ prompt: 'more', first: false, sessionId: 'abc-123' });
-  expect(resume.args).toEqual(['-p', '--resume', 'abc-123', 'more']);
+  expect(claude.stream.sessionArgs({ first: true, sessionId: 'abc-123' })).toEqual(['--session-id', 'abc-123']);
+  expect(claude.stream.sessionArgs({ first: false, sessionId: 'abc-123' })).toEqual(['--resume', 'abc-123']);
+  const msg = JSON.parse(claude.stream.encode('hi').trim());
+  expect(msg).toEqual({ type: 'user', message: { role: 'user', content: 'hi' } });
 });
 
 test('codex resumes by id, or --last when unknown', () => {
