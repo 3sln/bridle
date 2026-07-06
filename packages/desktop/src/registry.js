@@ -330,3 +330,29 @@ export function releaseServerLock() {
     /* nothing to release */
   }
 }
+/** Stop the running shared server and its whole process tree, then clear the lock. */
+export function stopServer() {
+  let pid;
+  try {
+    pid = Number(readFileSync(serverLockFile(), 'utf8').trim());
+  } catch {
+    return false;
+  }
+  if (pid && pidAlive(pid)) {
+    try {
+      if (process.platform === 'win32') {
+        Bun.spawnSync(['taskkill', '/PID', String(pid), '/T', '/F']); // tree: server + agents
+      } else {
+        process.kill(pid, 'SIGTERM');
+      }
+    } catch {
+      /* already gone */
+    }
+  }
+  try {
+    rmSync(serverLockFile(), { force: true });
+  } catch {
+    /* noop */
+  }
+  return true;
+}

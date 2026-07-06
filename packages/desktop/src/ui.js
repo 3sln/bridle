@@ -73,6 +73,9 @@ export const ui = {
     console.log(c.green(`✓ installed the bridle server service via ${svc.manager}`));
     console.log(c.dim(`  ${svc.path}`));
     console.log(c.dim('  it now runs every tether across logins.'));
+    if (svc.manager === 'task-scheduler') {
+      console.log(c.dim('  runs in the background with a 🐴 tray icon (right-click to restart or quit) — no terminal window.'));
+    }
   },
   setups(list) {
     if (!list.length) {

@@ -20,7 +20,7 @@ import {
   FrontendProvider,
 } from './providers.js';
 import { SetupsQuery, RemoveSetupAction } from './bl/setups.js';
-import { getSetup, saveSetup, readSetups, envFileFor, acquireDaemonLock, releaseDaemonLock, serverRunning } from './registry.js';
+import { getSetup, saveSetup, readSetups, envFileFor, acquireDaemonLock, releaseDaemonLock, serverRunning, stopServer } from './registry.js';
 import { installServerService, startBackgroundServer, migrateLegacyServices } from './service.js';
 import { runSession } from './run.js';
 import { runServer } from './server.js';
@@ -129,6 +129,9 @@ async function ensureServer() {
 // Meant to be run from a console opened as administrator (where a locked-down
 // machine will let the task be registered). Falls back to a clear message.
 async function cmdDaemonize() {
+  // Replace any server already running (e.g. an older build's visible-terminal
+  // one) so the new hidden tray host cleanly owns the single instance.
+  if (serverRunning()) stopServer();
   try {
     const svc = await installServerService();
     await migrateLegacyServices(Object.keys(await readSetups())).catch(() => {});
@@ -136,11 +139,22 @@ async function cmdDaemonize() {
   } catch (err) {
     fail(`couldn't register the bridle server service: ${err.message}\n  open PowerShell as administrator, then run:  bridle daemonize`);
   }
-  if (!serverRunning()) {
+  // The task's /Run starts the tray host; give its windowless server a moment to
+  // claim the lock before deciding we need the transient fallback.
+  if (!(await waitFor(serverRunning, 3000))) {
     await startBackgroundServer().catch(() => {});
   }
   await new Promise((r) => setTimeout(r, 200));
   process.exit(0);
+}
+
+async function waitFor(pred, ms, step = 250) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (pred()) return true;
+    await new Promise((r) => setTimeout(r, step));
+  }
+  return pred();
 }
 
 // --- server: the shared supervisor (runs every tether) ----------------------

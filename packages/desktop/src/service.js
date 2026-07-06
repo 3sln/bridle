@@ -71,14 +71,11 @@ export async function startBackgroundServer() {
   const { exec, prefix } = selfCommand();
   const args = [...prefix, 'server'];
   if (process.platform === 'win32') {
-    // Start-Process fully detaches the child from us (Bun children can be tied to
-    // our lifetime otherwise).
-    const psArgs = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(',');
-    await run('powershell', [
-      '-NoProfile',
-      '-Command',
-      `Start-Process -FilePath '${exec.replace(/'/g, "''")}' -ArgumentList ${psArgs} -WindowStyle Hidden`,
-    ]);
+    // Windows console apps get a terminal window however they're launched, so the
+    // server runs behind a tray host (hidden PowerShell + NotifyIcon) that starts
+    // it truly windowless — same launcher the scheduled task uses.
+    const vbs = await writeTrayLauncher(SERVER_KEY, exec, args);
+    await run('wscript.exe', [vbs]);
   } else {
     const child = Bun.spawn([exec, ...args], { stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' });
     child.unref?.();
@@ -208,19 +205,16 @@ WantedBy=default.target
 //
 // A scheduled task that launches the console binary directly pops a terminal
 // window at every logon and keeps it open for the life of the server. So the
-// task instead runs a tiny generated VBScript through `wscript` (which has no
-// console of its own) that starts the server with a hidden window — the server
-// runs truly in the background, no terminal.
-const vbsPath = (key) => join(configDir(), `bridle-${key}.vbs`);
+// task instead runs a hidden "tray host": `wscript` (no console of its own)
+// starts a hidden PowerShell that launches the server truly windowless
+// (CreateNoWindow) and shows a system-tray icon — the only visible presence —
+// with a menu to restart or quit. See writeTrayLauncher below.
 const taskScheduler = {
   async install(key, tail) {
     const task = TASK(key);
     const { exec, prefix } = selfCommand();
-    const launcher = vbsPath(key);
-    // WScript.Shell.Run(cmd, 0, False): 0 = hidden window, False = don't wait.
-    const cmd = [exec, ...prefix, ...tail].map((t) => `""${t}""`).join(' ');
-    await writeFile(launcher, `CreateObject("WScript.Shell").Run "${cmd}", 0, False\r\n`);
-    const tr = winCmdLine(['wscript.exe', launcher]);
+    const vbs = await writeTrayLauncher(key, exec, [...prefix, ...tail]);
+    const tr = winCmdLine(['wscript.exe', vbs]);
     const created = await run('schtasks', [
       '/Create', '/TN', task, '/TR', tr, '/SC', 'ONLOGON', '/RL', 'LIMITED', '/F',
     ]);
@@ -235,7 +229,7 @@ const taskScheduler = {
   async uninstall(key) {
     await run('schtasks', ['/End', '/TN', TASK(key)]).catch(() => {});
     await run('schtasks', ['/Delete', '/TN', TASK(key), '/F']).catch(() => {});
-    await rm(vbsPath(key), { force: true }).catch(() => {});
+    await removeTrayLauncher(key);
     return true;
   },
   async status(key) {
@@ -249,3 +243,91 @@ const xml = (s) => String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;
 const shellQuote = (s) => (/[^\w@%+=:,./-]/.test(s) ? `'${s.replace(/'/g, `'\\''`)}'` : s);
 // A Windows command line from tokens: quote any token containing spaces.
 const winCmdLine = (tokens) => tokens.map((t) => (/\s/.test(t) ? `"${t}"` : t)).join(' ');
+
+// --- Windows tray host (hidden background server + NotifyIcon) ---------------
+const trayPs1Path = (key) => join(configDir(), `bridle-${key}-tray.ps1`);
+const trayVbsPath = (key) => join(configDir(), `bridle-${key}.vbs`);
+const psLiteral = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+// The PowerShell tray host: launches the server windowless, shows a tray icon,
+// keeps the server up while it lives, and tears the whole tree down on Quit.
+function trayScript(exec, argsList) {
+  const argsStr = argsList.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ');
+  return `# bridle background server + tray icon (generated — safe to delete)
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$Exe = ${psLiteral(exec)}
+$ServerArgs = ${psLiteral(argsStr)}
+function Start-Server {
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $Exe
+  $psi.Arguments = $ServerArgs
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  return [System.Diagnostics.Process]::Start($psi)
+}
+function Stop-Tree($p) {
+  if ($p -and -not $p.HasExited) {
+    Start-Process 'taskkill' -ArgumentList '/PID', $p.Id, '/T', '/F' -WindowStyle Hidden -Wait
+  }
+}
+$script:server = Start-Server
+$script:quitting = $false
+$script:fails = 0
+try { $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($Exe) } catch { $icon = [System.Drawing.SystemIcons]::Application }
+$script:ni = New-Object System.Windows.Forms.NotifyIcon
+$script:ni.Icon = $icon
+$script:ni.Text = 'bridle - running'
+$script:ni.Visible = $true
+$menu = New-Object System.Windows.Forms.ContextMenuStrip
+$hdr = $menu.Items.Add('bridle server'); $hdr.Enabled = $false
+[void]$menu.Items.Add('-')
+$restart = $menu.Items.Add('Restart')
+$restart.add_Click({ Stop-Tree $script:server; $script:fails = 0; $script:server = Start-Server })
+$quit = $menu.Items.Add('Quit bridle')
+$quit.add_Click({
+  $script:quitting = $true
+  Stop-Tree $script:server
+  $script:ni.Visible = $false
+  $script:ni.Dispose()
+  [System.Windows.Forms.Application]::Exit()
+})
+$script:ni.ContextMenuStrip = $menu
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 2000
+$timer.add_Tick({
+  if ($script:quitting) { return }
+  if ($script:server.HasExited) {
+    $script:fails++
+    if ($script:fails -le 5) { $script:server = Start-Server }
+    else { $script:ni.Visible = $false; [System.Windows.Forms.Application]::Exit() }
+  } else {
+    $script:fails = 0
+  }
+})
+$timer.Start()
+[System.Windows.Forms.Application]::Run()
+Stop-Tree $script:server
+`;
+}
+
+// A .vbs that starts the tray host's PowerShell with no window of its own.
+// WScript.Shell.Run(cmd, 0, False): 0 = hidden, False = don't wait.
+function trayVbs(key) {
+  const tokens = ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Sta', '-WindowStyle', 'Hidden', '-File', trayPs1Path(key)];
+  const cmd = tokens.map((t) => `""${t}""`).join(' ');
+  return `CreateObject("WScript.Shell").Run "${cmd}", 0, False\r\n`;
+}
+
+export async function writeTrayLauncher(key, exec, argsList) {
+  await mkdir(configDir(), { recursive: true }).catch(() => {});
+  await writeFile(trayPs1Path(key), trayScript(exec, argsList));
+  await writeFile(trayVbsPath(key), trayVbs(key));
+  return trayVbsPath(key);
+}
+
+export async function removeTrayLauncher(key) {
+  await rm(trayVbsPath(key), { force: true }).catch(() => {});
+  await rm(trayPs1Path(key), { force: true }).catch(() => {});
+}
