@@ -65,7 +65,10 @@ async function issueIce(request, env) {
       ttl: cfg.ttl,
       customIdentifier: room || ip,
     });
-    return { iceServers: [entry, ...base], turn: true, ttl: cfg.ttl, remainingGb: verdict.remainingGb };
+    // Deliberately not `remainingGb`: /ice is public and unauthenticated, and
+    // telling a caller exactly how much of the monthly budget is left is telling
+    // them how much is left to drain. The client has no use for it either.
+    return { iceServers: [entry, ...base], turn: true, ttl: cfg.ttl };
   } catch {
     return { iceServers: base, turn: false, reason: 'mint-failed' };
   }

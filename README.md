@@ -47,9 +47,18 @@ administrator to make it permanent.
 ```sh
 bridle                            # your tethers + status (running/daemonized), and help
 bridle daemonize <name>          # register the persistent service (run as admin if blocked)
+bridle unpair <name>             # forget the paired phone, so a new one can pair
 bridle remove <name>             # stop + uninstall one
 bridle tether work claude --webview   # also pop a native QR window
 ```
+
+**Pairing.** The first phone to connect to a tether is pinned to it
+(trust-on-first-use — see the HELLO handshake), and every other device is
+refused: the room token alone can't drive your agent. Re-scanning the QR does
+*not* re-pair, because re-tethering keeps the same room and therefore the same
+pin. When the paired phone is gone — you reinstalled the app, cleared its data,
+or you have a new handset — run `bridle unpair <name>` and open the app on the
+phone you want. `bridle list` shows which tethers are paired.
 
 ## How it works
 
