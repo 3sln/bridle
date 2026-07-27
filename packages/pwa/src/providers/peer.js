@@ -69,6 +69,11 @@ export class GuestPeer extends EventTarget {
     });
   }
 
+  /** The link is the data channel — not ICE, and not the signaling socket. */
+  get open() {
+    return this.channel.readyState === 'open';
+  }
+
   send(msg) {
     if (this.channel.readyState === 'open') {
       this.channel.send(encode(msg));

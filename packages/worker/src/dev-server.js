@@ -5,9 +5,10 @@
 //
 //   bun src/dev-server.js [--port 8787] [--assets ../pwa/dist]
 
+import { normalize, resolve, sep } from 'node:path';
 import { SignalingRoom } from './signaling-room.js';
+import { handleRequest } from './app.js';
 import { baseIceServers } from './turn.js';
-import { isValidRoomCode } from '@bridle/protocol/signaling';
 
 // One in-memory hub of rooms, keyed by code. Garbage-collected when empty.
 const rooms = new Map();
@@ -30,35 +31,21 @@ const assetsDir = argFlag('--assets', new URL('../../pwa/dist', import.meta.url)
 
 const server = Bun.serve({
   port,
+  // Routing is the shared, platform-neutral `handleRequest` — the same one the
+  // Cloudflare Worker uses. Only the three adapters below differ, so dev can't
+  // drift from production (it used to re-implement the routes and, among other
+  // things, had no /install.sh and served the landing page for `/app/`).
   async fetch(request, server) {
-    const url = new URL(request.url);
-
-    if (url.pathname === '/healthz') return new Response('ok');
-
-    // ICE servers — dev has no Cloudflare TURN secrets, so just the free base.
-    if (url.pathname === '/ice') {
-      return new Response(JSON.stringify({ iceServers: baseIceServers(), turn: false, reason: 'dev' }), {
-        headers: {
-          'content-type': 'application/json',
-          'access-control-allow-origin': '*',
-          'cache-control': 'no-store',
-        },
-      });
-    }
-
-    if (url.pathname === '/signal') {
-      const code = url.searchParams.get('room') || '';
-      const role = url.searchParams.get('role') || '';
-      if (!isValidRoomCode(code) || (role !== 'host' && role !== 'guest')) {
-        return new Response('bad request', { status: 400 });
-      }
+    return handleRequest(request, {
       // Stash the role/code; the peer wrapper is built in `open`.
-      if (server.upgrade(request, { data: { code, role } })) return undefined;
-      return new Response('expected websocket', { status: 426 });
-    }
-
-    // Static assets with SPA fallback.
-    return serveStatic(url.pathname, assetsDir);
+      routeSignal: (req, code, role) => {
+        if (server.upgrade(req, { data: { code, role } })) return undefined;
+        return new Response('expected websocket', { status: 426 });
+      },
+      serveAsset: (req) => serveStatic(new URL(req.url).pathname, assetsDir),
+      // Dev has no Cloudflare TURN secrets, so just the free STUN base.
+      issueIce: () => ({ iceServers: baseIceServers(), turn: false, reason: 'dev' }),
+    });
   },
   websocket: {
     open(ws) {
@@ -92,15 +79,37 @@ const server = Bun.serve({
   },
 });
 
+// Serve a file from the build output, mirroring what Cloudflare's asset handler
+// does for us in production: a directory resolves to its index.html (the PWA
+// lives at /app/, so this is the app itself, not a nicety), and anything else
+// falls back to the shell.
 async function serveStatic(pathname, dir) {
-  const rel = pathname === '/' ? '/index.html' : pathname;
-  let file = Bun.file(dir + rel);
-  if (!(await file.exists())) {
-    // SPA fallback so deep links resolve to the app shell.
-    file = Bun.file(dir + '/index.html');
-    if (!(await file.exists())) return new Response('PWA not built (run build:pwa)', { status: 404 });
+  const root = resolve(dir);
+  let rel;
+  try {
+    rel = decodeURIComponent(pathname);
+  } catch {
+    return new Response('bad request', { status: 400 });
   }
-  return new Response(file);
+
+  // `..` in a URL must not reach outside the build output — this server is also
+  // the self-hosting path, not just a local convenience.
+  const target = resolve(root, '.' + normalize(rel));
+  if (target !== root && !target.startsWith(root + sep)) {
+    return new Response('forbidden', { status: 403 });
+  }
+
+  const candidates = rel.endsWith('/') ? [target + sep + 'index.html'] : [target, target + sep + 'index.html'];
+  for (const path of candidates) {
+    const file = Bun.file(path);
+    if (await file.exists()) return new Response(file);
+  }
+
+  // SPA fallback so client-routed deep links resolve to the app shell — 200, as
+  // Cloudflare's `not_found_handling = "single-page-application"` serves it.
+  const shell = Bun.file(root + sep + 'index.html');
+  if (!(await shell.exists())) return new Response('PWA not built (run build:pwa)', { status: 404 });
+  return new Response(shell);
 }
 
 console.log(`tether signaling + PWA on http://localhost:${server.port}`);

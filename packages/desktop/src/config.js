@@ -35,12 +35,26 @@
 // synthesis, so the desktop needs NO API keys.
 
 import { basename } from 'node:path';
-import { makeToken } from '@bridle/protocol/signaling';
+import { makeToken, isValidRoomCode } from '@bridle/protocol/signaling';
 import { DEFAULT_ICE_SERVERS, STUN_SERVERS } from '@bridle/protocol/ice';
 import { resolveAgent } from './agents.js';
 
 const DEFAULT_BACKEND = 'https://bridle.3sln.com';
-export const KNOWN_SUBS = new Set(['tether', 'daemonize', 'list', 'remove', 'rm', 'daemon', 'server', 'help']);
+export const KNOWN_SUBS = new Set(['tether', 'daemonize', 'list', 'remove', 'rm', 'unpair', 'daemon', 'server', 'help']);
+
+// The room token is the signaling address AND the first-contact secret, and the
+// relay rejects anything outside its alphabet. A hand-picked `--room` that isn't
+// valid used to be accepted here and then fail invisibly: the QR printed, the
+// desktop retried a 400 forever, and the tether sat at "starting" with no error
+// anyone could see. Fail at the point the value is chosen instead.
+export function validateRoom(room, source) {
+  if (isValidRoomCode(room)) return room;
+  throw new Error(
+    `invalid room token from ${source}: "${room}"\n` +
+      '  tokens are 4–64 chars from the Crockford-style alphabet 23456789abcdefghjkmnpqrstvwxyz\n' +
+      '  (no 0/1/i/l/o/u, lowercase) — omit --room to have one generated.',
+  );
+}
 
 export function parseArgs(argv = process.argv.slice(2)) {
   const dashDash = argv.indexOf('--');
@@ -81,7 +95,11 @@ export function loadConfig(parsed = parseArgs(), env = process.env) {
   if (has('--local')) backend = 'http://localhost:8787';
   backend = backend.replace(/\/$/, '');
 
-  const room = get('--room') || env.BRIDLE_ROOM || makeToken();
+  const room = get('--room')
+    ? validateRoom(get('--room'), '--room')
+    : env.BRIDLE_ROOM
+      ? validateRoom(env.BRIDLE_ROOM, 'BRIDLE_ROOM')
+      : makeToken();
   const turn = !has('--no-turn');
   const name = get('--name') || tetherName || basename(process.cwd()) || 'default';
   const modeName = get('--mode') || null;

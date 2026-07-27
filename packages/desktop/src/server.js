@@ -42,11 +42,27 @@ export async function runServer(buildEngine, { ui } = {}) {
   async function startTether(setup) {
     const config = configFromSetup(setup);
     const engine = buildEngine(config);
+    // The supervisor used to run blind: a refused device, a dead MCP server or a
+    // failed negotiation happened entirely inside the session and reached
+    // nothing you could read. Phase changes and bridle's own notes go to the
+    // journal, tagged with the tether they came from. The agent's stdout does
+    // NOT — that belongs to the phone, and mirroring it here would bury this.
+    let lastPhase = null;
+    let lastError = null;
+    engine.feed.addEventListener('bridle-note', (e) => ui?.note?.(`${setup.name}: ${e.detail.text}`));
+    engine.feed.addEventListener('mcp-up', (e) => ui?.note?.(`${setup.name}: agent front-end tools (MCP) at ${e.detail.url}`));
+
     const handle = engine.query(new SessionQuery());
     // Keep the subscription for the tether's lifetime; disposing the engine kills
     // the query (and tears the session down) when we stop it.
     handle.subscribe((state) => {
       if (!sessions.has(setup.name)) return; // stopping — ignore late frames
+      if (state.phase !== lastPhase) {
+        lastPhase = state.phase;
+        ui?.note?.(`${setup.name}: ${state.phase}${state.guest ? ` (${state.guest})` : ''}`);
+      }
+      if (state.error && state.error !== lastError) ui?.note?.(`${setup.name}: ${state.error}`);
+      lastError = state.error;
       status[setup.name] = {
         phase: state.phase,
         guest: state.guest || null,

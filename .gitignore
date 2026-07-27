@@ -12,3 +12,4 @@ bun.lockb
 packages/desktop/bridle
 packages/desktop/bridle-*
 .dev.vars
+.tmp/

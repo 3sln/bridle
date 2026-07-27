@@ -82,7 +82,13 @@ export default alias(function (state) {
   // A brief reconnect is transparent (only the status bead shows it) — the server
   // holds our session and buffers replies, so the composer stays usable.
   const linked = state.connection === 'tethered' || state.connection === 'reconnecting';
-  const placeholder = linked ? 'Message your agent…' : 'Not linked yet — messages send once connected';
+  const placeholder = linked
+    ? 'Message your agent…'
+    : state.connection === 'unpaired'
+      // Promising delivery "once connected" would be a lie here: nothing this
+      // phone does will connect it until the desktop hands the pairing over.
+      ? 'This phone isn’t paired with the desktop'
+      : 'Not linked yet — messages send once connected';
 
   // Paperclip: a hidden file input inside a label opens the picker on tap.
   const attach = h('label', { className: 'attach-btn', title: 'Attach files', 'aria-label': 'Attach files' },
@@ -124,7 +130,7 @@ function attachChips(attachments, fire) {
 
 // A genuinely-absent desktop is surfaced; a transient reconnect is left to the
 // status bead so the conversation view doesn't flicker on a backgrounded tab.
-const LINK_STATUS = { waiting: 'Waiting for desktop…', negotiating: 'Linking…', connecting: 'Connecting…' };
+const LINK_STATUS = { waiting: 'Waiting for desktop…', negotiating: 'Linking…', connecting: 'Connecting…', unpaired: 'Not paired' };
 
 function conversationBar(state, fire) {
   const linkMsg = state.connection !== 'tethered' && (LINK_STATUS[state.connection] || null);

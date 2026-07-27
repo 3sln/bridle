@@ -22,6 +22,20 @@
   color-scheme: dark;
 }
 
+/* Self-hosted (see public/fonts/README.md): the app has to look right on a phone
+   with no connection, and a third-party icon font is the one request that turns
+   every button into the word "add_photo_alternate" when it doesn't arrive.
+   `block` rather than `swap` for the same reason — an icon's ligature name is
+   never a useful thing to show, so we wait for the glyph instead of flashing
+   text at the user. */
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: block;
+  src: url('/fonts/material-symbols-rounded.woff2') format('woff2');
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -30,7 +44,9 @@ body {
     radial-gradient(900px 520px at 8% 108%, rgba(52, 211, 153, .06), transparent 55%),
     var(--bg);
   color: var(--text);
-  font: 16px/1.5 'Inter', system-ui, -apple-system, sans-serif;
+  /* The platform's own UI face (SF Pro on iOS, Roboto on Android) — already on
+     the device, so there's no webfont to wait for and nothing to fetch. */
+  font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
   letter-spacing: .005em;
@@ -51,6 +67,16 @@ body {
   font-size: 22px;
   user-select: none;
   font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  /* Every glyph in this font is exactly 1em wide, so boxing the span costs
+     nothing when the font is there — and keeps a missing font from spilling
+     "add_photo_alternate" across the header when it isn't. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  flex: none;
 }
 
 .app { height: 100dvh; display: flex; flex-direction: column; }
@@ -76,16 +102,20 @@ body {
 .status .dot.tethered { background: var(--green); box-shadow: 0 0 0 3px rgba(52, 211, 153, .18), 0 0 12px var(--green); }
 .status .dot.connecting, .status .dot.negotiating, .status .dot.reconnecting { background: var(--amber); box-shadow: 0 0 0 3px rgba(251, 191, 36, .15); animation: blink 1.2s ease-in-out infinite; }
 .status .dot.waiting { background: var(--accent); box-shadow: 0 0 0 3px rgba(124, 92, 255, .18); animation: blink 1.6s ease-in-out infinite; }
-.status .dot.error { background: var(--red); }
+.status .dot.error, .status .dot.unpaired { background: var(--red); }
 @keyframes blink { 50% { opacity: .35; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 .hint.loading { display: inline-flex; align-items: center; gap: 6px; }
 .hint.loading .spin { animation: spin 1s linear infinite; font-size: 16px; }
 
-.status-label { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The connection word outranks the tether's name: which desktop you're on is
+   already in the chip's first few characters, but "reconnecting…" clipped to
+   "r" tells you nothing. So the label holds its width and the chip truncates. */
+.status-label { color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; max-width: 42vw; }
 .tether-chip {
   appearance: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
+  flex: 0 1 auto; min-width: 0;
   max-width: 52vw; padding: 5px 11px 5px 9px; border-radius: 999px;
   background: var(--grad-soft); border: 1px solid rgba(124, 92, 255, .35);
   color: var(--accent-2); font-weight: 600; font-size: 13.5px; font-family: inherit;
@@ -496,7 +526,7 @@ body {
 .sc-desc { color: var(--text); font-size: 15px; }
 .sc-keys { display: flex; gap: 6px; flex: none; }
 kbd {
-  font-family: 'Inter', ui-monospace, monospace; font-size: 12px; font-weight: 600; line-height: 1;
+  font-family: inherit; font-size: 12px; font-weight: 600; line-height: 1;
   color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
   border-bottom-width: 2px; border-radius: 7px; padding: 5px 8px; min-width: 22px; text-align: center;
 }

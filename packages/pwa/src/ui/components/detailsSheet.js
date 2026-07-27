@@ -14,6 +14,7 @@ const STATUS = {
   negotiating: 'Linking…',
   tethered: 'Connected',
   reconnecting: 'Reconnecting…',
+  unpaired: 'Refused — this phone isn’t paired',
   error: 'Error',
 };
 

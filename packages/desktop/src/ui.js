@@ -3,9 +3,9 @@
 
 import { PHASE } from './bl/session.js';
 import { platformName } from './service.js';
-import { listProfiles } from './agents.js';
+import { listProfiles, commandLabel } from './agents.js';
 
-const agentLabel = (a) => (!a ? '?' : a.id === 'custom' || !a.id ? (a.command || []).join(' ') : a.id);
+const agentLabel = (a) => (!a ? '?' : a.id === 'custom' || !a.id ? commandLabel(a.command || []) : a.id);
 const claudeModes = () => listProfiles().find((p) => p.id === 'claude')?.modes || {};
 
 const c = {
@@ -47,6 +47,10 @@ export const ui = {
   },
   removed({ name, removed }) {
     console.log(removed ? c.green(`✓ removed "${name}"`) : c.yellow(`· no tether named "${name}"`));
+  },
+  unpaired({ name, had }) {
+    console.log(had ? c.green(`✓ unpaired "${name}"`) : c.yellow(`· "${name}" had no paired phone`));
+    console.log(c.dim('  the next phone to connect pairs with it — open the app on the phone you want.'));
   },
   // After `bridle tether`: report how the shared server is handling it.
   tetherAdded(setup, ensured) {
@@ -96,10 +100,16 @@ export const ui = {
       const state = s.running
         ? c.green(phaseWord(s.phase) + (s.guest ? c.dim(` · ${s.guest}`) : ''))
         : c.dim('idle');
-      console.log(`  ${dot} ${c.bold(s.name.padEnd(16))} ${state}   ${c.dim(agentLabel(s.agent))}`);
+      // Whether a phone is pinned is the difference between "the next device to
+      // scan gets in" and "only that one does", so it belongs in the listing.
+      const pair = s.paired ? c.dim(' · paired') : c.yellow(' · unpaired');
+      console.log(`  ${dot} ${c.bold(s.name.padEnd(16))} ${state}${pair}   ${c.dim(agentLabel(s.agent))}`);
       if (s.cwd) {
         console.log(`    ${c.dim(s.cwd)}`);
       }
+    }
+    if (list.some((s) => s.paired)) {
+      console.log(c.dim('\n  lost the paired phone?  bridle unpair <name>'));
     }
     console.log('');
   },
@@ -119,6 +129,7 @@ ${c.bold('usage')}
   bridle daemonize                        keep the bridle server running across logins
                                           ${c.dim('(run from PowerShell opened as administrator)')}
   bridle list                            list your tethers + status
+  bridle unpair <name>                   forget the paired phone (pair a new one)
   bridle remove <name>                   stop + remove a tether
   bridle help                            show this help
 
@@ -152,6 +163,7 @@ ui.quiet = {
   agentOutput: () => {},
   guestInput: () => {},
   removed: () => {},
+  unpaired: () => {},
   tetherAdded: () => {},
   serverInstalled: () => {},
   setups: () => {},
