@@ -146,10 +146,14 @@ body {
 }
 .msg { display: flex; align-items: flex-end; gap: 6px; animation: rise .22s ease both; }
 @keyframes rise { from { opacity: 0; transform: translateY(7px); } }
+/* The only thing sharing a row with a bubble is the speaker button, so the
+   ceiling is "the row, minus that button" rather than an arbitrary fraction.
+   At 82% a phone-width bubble gave up ~70px per line and wrapped early for no
+   reason; this still leaves the inset that says who is speaking. */
 .msg .bubble {
-  max-width: 82%; padding: 8px 12px 6px; border-radius: 18px;
+  max-width: calc(100% - 40px); padding: 8px 12px 6px; border-radius: 18px;
   font-size: 15px; line-height: 1.45; box-shadow: var(--shadow-sm);
-  display: flex; flex-direction: column;
+  display: flex; flex-direction: column; min-width: 0;
 }
 .bubble-text { white-space: pre-wrap; word-break: break-word; }
 .msg.user { justify-content: flex-end; }
@@ -160,8 +164,8 @@ body {
   background: rgba(255, 255, 255, .04); color: var(--muted); font-size: 12.5px;
   padding: 4px 12px; border-radius: 999px; box-shadow: none; border: 1px solid var(--line-soft);
 }
-.msg.system.error .bubble { color: var(--red); border-color: rgba(251, 113, 133, .3); }
-.msg.command .bubble { background: var(--accent-dim); color: #fff; }
+.msg.system.k-error .bubble { color: var(--red); border-color: rgba(251, 113, 133, .3); }
+.msg.k-command .bubble { background: var(--accent-dim); color: #fff; }
 .msg .tag { align-self: flex-end; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0 6px 4px 0; }
 /* Held for the next turn while the agent is still replying. */
 .msg.queued { opacity: .6; }
@@ -326,9 +330,39 @@ body {
 .msg .caption { font-size: 13px; color: var(--muted); }
 .msg .bubble.file { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); }
 .msg .file-name { text-decoration: underline; }
-.msg .bubble.md { display: flex; flex-direction: column; gap: 6px; }
+/* Agent-rendered markdown cards. The body is real structure now (see
+   lib/markdown.js), so it gets typography rather than a pre-wrap blob — tuned
+   tight, because this is a chat bubble on a phone, not a document. */
+/* A card of structured content earns the full row — nobody needs a chat inset
+   to know a table came from the agent. */
+.msg .bubble.md { display: flex; flex-direction: column; gap: 6px; max-width: calc(100% - 30px); }
 .msg .md-title { font-weight: 700; }
-.msg .md-body { white-space: pre-wrap; }
+.msg .md-body { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child { margin-bottom: 0; }
+.md-p { margin: 0; word-break: break-word; }
+.md-h { margin: 2px 0 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
+.md-h:first-child { margin-top: 0; }
+/* Explicit markers: these lists sit inside the transcript's own <li>, so the
+   browser treats them as nested and quietly downgrades the bullet to a hollow
+   ring. */
+ul.md-list { list-style: disc; }
+ol.md-list { list-style: decimal; }
+.md-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; }
+.md-list li { word-break: break-word; }
+.md-quote { border-left: 2px solid var(--accent-dim); padding-left: 10px; color: var(--muted); }
+.md-hr { border: 0; border-top: 1px solid var(--line); margin: 2px 0; width: 100%; }
+.md-code { background: rgba(255, 255, 255, .07); border-radius: 5px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; }
+.md-pre {
+  margin: 0; padding: 9px 11px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.45;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.md-body a { color: var(--accent-2); overflow-wrap: anywhere; }
+/* A table that doesn't fit scrolls sideways instead of stretching the bubble. */
+.md-table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 13px; max-width: 100%; }
+.md-table th, .md-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; white-space: nowrap; }
+.md-table th { background: var(--bg-soft); font-weight: 600; }
 
 /* ---- agent status line ------------------------------------------------- */
 .status-line { margin: 2px 16px 8px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; }

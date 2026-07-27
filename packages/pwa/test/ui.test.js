@@ -127,3 +127,36 @@ test('messageList reads a message aloud on tap only outside hands-free mode', as
   const handsFree = mount(messageList({ conversation: true, messages: msgs }));
   expect(handsFree.querySelector('.speak-btn')).toBeFalsy();
 });
+
+test('a message kind cannot collide with a layout class', async () => {
+  // `kind: 'status'` used to land in the class list raw, matching the header's
+  // own `.status` rule — so every system line inherited sticky positioning, a
+  // backdrop blur, a border and a 56px min-height, and hung over the transcript
+  // as a banner that wouldn't scroll away.
+  const messageList = (await import('../src/ui/components/messageList.js')).default;
+  const ts = Date.now();
+  const root = mount(messageList({ messages: [
+    { id: 'a', role: 'system', content: 'new conversation', kind: 'status', ts },
+    { id: 'b', role: 'system', content: 'agent exited', kind: 'error', ts },
+    { id: 'c', role: 'user', content: 'stop talking', kind: 'command', ts },
+  ] }));
+  const classes = [...root.querySelectorAll('.msg')].flatMap((li) => [...li.classList]);
+  expect(classes).toContain('k-status');
+  expect(classes).not.toContain('status'); // the header's class, not a message's
+  expect(classes).toContain('k-error');
+  expect(classes).toContain('k-command');
+  // The kind styling still applies through the namespaced names.
+  expect(root.querySelector('.msg.system.k-error')).toBeTruthy();
+  expect(root.querySelector('.msg.k-command')).toBeTruthy();
+});
+
+test('a markdown card renders structure rather than its source', async () => {
+  const messageList = (await import('../src/ui/components/messageList.js')).default;
+  const root = mount(messageList({ conversation: false, messages: [
+    { id: 'm', role: 'assistant', kind: 'markdown', title: 'Report', ts: Date.now(), content: '## Findings\n\n- one\n- two' },
+  ] }));
+  expect(root.querySelector('.md-body .md-h')?.textContent).toBe('Findings');
+  expect(root.querySelectorAll('.md-body li').length).toBe(2);
+  expect(root.textContent).not.toContain('##');
+  expect(root.querySelector('.speak-btn')).toBeTruthy(); // reads the prose, not the syntax
+});
