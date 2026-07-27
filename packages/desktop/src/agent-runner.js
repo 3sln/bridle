@@ -13,7 +13,7 @@
 // The rest of the app only sees this surface (start/write/interrupt/…/events),
 // never how the process is made or which agent it is.
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { VOICE_PRIMER } from './agents.js';
@@ -51,7 +51,10 @@ export class AgentRunner extends EventTarget {
     if (!this.mcpReady) {
       this.mcpConfigPath = join(tmpdir(), `bridle-mcp-${process.pid}-${this.rid}.json`);
       if (this.profile.mcpConfig) {
-        writeFileSync(this.mcpConfigPath, JSON.stringify(this.profile.mcpConfig(this.mcpUrl)));
+        // The URL carries the MCP server's capability token, and tmpdir is
+        // world-readable — so this file is the agent's alone.
+        writeFileSync(this.mcpConfigPath, JSON.stringify(this.profile.mcpConfig(this.mcpUrl)), { mode: 0o600 });
+        chmodSync(this.mcpConfigPath, 0o600); // `mode` only applies on creation
       }
       this.mcpReady = true;
     }

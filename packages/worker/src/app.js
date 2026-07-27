@@ -29,6 +29,52 @@ const cors = (res) => {
   return res;
 };
 
+// The app renders HTML the agent composed (`show_form`, `show_markdown`), and
+// the agent's own context can contain things it merely read somewhere. DOMPurify
+// and a shadow root handle the markup; this handles the rest of the blast
+// radius, and enforces at the browser what the README promises: nothing bridle
+// serves loads a script, a font, or an image from anyone else.
+//
+//   wasm-unsafe-eval  the ONNX runtime behind on-device Whisper
+//   'unsafe-inline'   styles only — the form sheet injects a themed stylesheet
+//                     and agents write style attributes
+//   img/media blob:   assets the agent pushes arrive over the data channel
+//   connect https:    a tether names its own backend, and the Whisper weights
+//                     come from the HF hub
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
+  "img-src 'self' data: blob:",
+  "media-src 'self' data: blob:",
+  "worker-src 'self' blob:",
+  "connect-src 'self' https: wss: blob: data:",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'none'", // agent forms submit over the data channel; nothing navigates
+].join('; ');
+
+function harden(res) {
+  // Mutate in place where the runtime allows it (Bun): re-wrapping a
+  // file-backed response turns it into a chunked stream and — the part that
+  // matters, given the `nosniff` below — drops its content type entirely.
+  // Cloudflare's asset responses have immutable headers, so there they are
+  // copied across explicitly instead.
+  let out = res;
+  try {
+    out.headers.set('content-security-policy', CSP);
+  } catch {
+    const headers = new Headers(res.headers);
+    headers.set('content-security-policy', CSP);
+    out = new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+  }
+  out.headers.set('x-content-type-options', 'nosniff');
+  out.headers.set('referrer-policy', 'no-referrer');
+  return out;
+}
+
 export async function handleRequest(request, { routeSignal, serveAsset, issueIce }) {
   const url = new URL(request.url);
 
@@ -62,5 +108,5 @@ export async function handleRequest(request, { routeSignal, serveAsset, issueIce
   }
 
   // Everything else is the PWA (with SPA fallback handled by the asset adapter).
-  return serveAsset(request);
+  return harden(await serveAsset(request));
 }
