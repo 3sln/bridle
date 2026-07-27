@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "bridle",
@@ -11,7 +12,7 @@
         "bridle": "src/index.js",
       },
       "dependencies": {
-        "@3sln/ngin": "^0.0.3",
+        "@3sln/ngin": "^0.0.4",
         "@bridle/protocol": "workspace:*",
         "qrcode": "^1.5.4",
         "werift": "^0.19.0",
@@ -28,9 +29,8 @@
       "name": "@bridle/pwa",
       "version": "0.0.1",
       "dependencies": {
-        "@3sln/bones": "^0.0.5",
-        "@3sln/dodo": "^0.0.9",
-        "@3sln/ngin": "^0.0.3",
+        "@3sln/dodo": "^0.0.10",
+        "@3sln/ngin": "^0.0.4",
         "@bridle/protocol": "workspace:*",
         "@huggingface/transformers": "^3.0.0",
         "@ricky0123/vad-web": "^0.0.30",
@@ -56,11 +56,9 @@
     },
   },
   "packages": {
-    "@3sln/bones": ["@3sln/bones@0.0.5", "", {}, "sha512-fts4JVlnfcd44ADtYxE6KQQwWKUVhMBo9omt6fqzZbtSOYSlYkEt7El+PJghwoA8R366ImR3FE1f2Vgvw7g4MA=="],
+    "@3sln/dodo": ["@3sln/dodo@0.0.10", "", {}, "sha512-bkZPspzCby0Q1PoRtXAoNcqQFTK0tNEddLxpGC1FaKXXfffUwJfkw1bXxWUxPQEtddlgW7r16c/myhcXnPHURg=="],
 
-    "@3sln/dodo": ["@3sln/dodo@0.0.9", "", {}, "sha512-d0PVcdMTo6rL6+8lcdYGVKlO1LXWlfNe41RbCPP/UE4JYmzdqisp+sBecEYeSRxTLpu0olw7k+BiZ/cdihyKMw=="],
-
-    "@3sln/ngin": ["@3sln/ngin@0.0.3", "", {}, "sha512-8v+tYVWJiheSy6sXlNYl2hsx//iXLmnIjmTZsQDiOez5Wh9MpoWm6psP9jydN/lh6tUfbMgVSRTgo815xQC45A=="],
+    "@3sln/ngin": ["@3sln/ngin@0.0.4", "", {}, "sha512-lTx+5gcIhmlk6av1JSWPIpY7qeyTY2l6IoCh8OgySzSxO1tWZv2D7pOKZHKX5dlO8kQZgeViAYJgs2wxGfiINw=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

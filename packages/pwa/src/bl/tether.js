@@ -1,6 +1,6 @@
 // The phone's brain. One long-lived ngin Query boots the connection (guest /
 // offerer), wires mic + TTS, drives conversation mode, and `notify`s a single
-// UI state snapshot the composition renders via bones `watch`.
+// UI state snapshot the composition renders via dodo `watch`.
 //
 // User intents arrive as dispatched Actions that emit on the engineFeed; the
 // query (which holds the live peer/mic/tts) reacts. This is ngin's choreographer
@@ -10,6 +10,7 @@ import { Query, Action } from '@3sln/ngin';
 import {
   LINK,
   COMMAND,
+  NOTICE_CODE,
   helloGuest,
   text as mkText,
   command as mkCommand,
@@ -21,6 +22,8 @@ import {
   formFileEnd as mkFormFileEnd,
   attachBegin as mkAttachBegin,
   attachEnd as mkAttachEnd,
+  ping as mkPing,
+  pong as mkPong,
 } from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
@@ -31,9 +34,10 @@ export const CONNECTION = Object.freeze({
   NONE: 'no-tether', // no tether selected — scan a QR
   CONNECTING: 'connecting',
   WAITING: 'waiting', // signaling up, desktop not present yet
-  NEGOTIATING: 'negotiating',
+  NEGOTIATING: 'negotiating', // channel opening, or open and awaiting the host's verdict
   TETHERED: 'tethered',
   RECONNECTING: 'reconnecting',
+  UNPAIRED: 'unpaired', // the desktop refused this device — terminal until unpaired
   ERROR: 'error',
 });
 
@@ -364,7 +368,16 @@ export class TetherQuery extends Query {
     }
 
     // --- connection / negotiation (guest = offerer) -------------------------
+    // The host verified us and opened the tether (LINK.READY). Everything that
+    // means "we can actually deliver a message" hangs off this, not off the
+    // channel opening or off HELLO — HELLO is only the host's challenge, and a
+    // device about to be refused receives one just the same.
+    let admitted = false;
+
     function teardownPeer() {
+      admitted = false;
+      for (const settle of pongWaiters.values()) settle();
+      pongWaiters.clear();
       resetTurn();
       if (peer) {
         try {
@@ -385,10 +398,23 @@ export class TetherQuery extends Query {
       peer.addEventListener('open', onPeerOpen);
       peer.addEventListener('message', (e) => handleLink(e.detail.msg));
       peer.addEventListener('binary', (e) => onBinary(e.detail.chunk));
-      peer.addEventListener('closed', () => push({ connection: CONNECTION.WAITING }));
+      peer.addEventListener('closed', () => {
+        // A refusal is terminal: the desktop is there and reachable, it just
+        // won't talk to this device. Saying "waiting for desktop…" would send
+        // the user hunting for a problem that isn't the one they have.
+        if (state.connection !== CONNECTION.UNPAIRED) push({ connection: CONNECTION.WAITING });
+      });
       peer.addEventListener('state', (e) => {
-        if (e.detail.state === 'failed' || e.detail.state === 'disconnected') {
-          push({ connection: CONNECTION.RECONNECTING });
+        const ice = e.detail.state;
+        // ICE flaps. `disconnected` in particular is routinely transient — a
+        // tunnel, a handover, a few lost packets — and it used to be a one-way
+        // door: nothing ever moved the badge back, so a link that recovered
+        // seconds later still read "reconnecting" for the rest of the session.
+        // That is the "it says disconnected but it clearly works" complaint.
+        if (ice === 'failed' || ice === 'disconnected') {
+          if (admitted) push({ connection: CONNECTION.RECONNECTING });
+        } else if ((ice === 'connected' || ice === 'completed') && admitted && peer?.open) {
+          push({ connection: CONNECTION.TETHERED, error: null });
         }
       });
       try {
@@ -450,39 +476,107 @@ export class TetherQuery extends Query {
       else notifyNow();
     });
 
-    signaling.addEventListener('open', () => push({ connection: CONNECTION.CONNECTING }));
-    signaling.addEventListener('joined', (e) => {
+    // Everything the relay says about the *other end's socket* is second-hand
+    // news about our link. The relay drops, hibernates, or loses the desktop's
+    // socket for a moment and announces a departure and an arrival — while the
+    // P2P channel between us carries on, untouched, because it never went
+    // through the relay in the first place. Acting on that news tore down a
+    // working tether and made the user watch it rebuild.
+    //
+    // So: ask the link itself. PING/PONG is already in the protocol and the
+    // desktop already answers it. If it answers, there is nothing to do.
+    const pongWaiters = new Map();
+    let pingSeq = 0;
+    function probeLink(timeoutMs = 2500) {
+      if (!admitted || !peer?.open) return Promise.resolve(false);
+      const ts = ++pingSeq;
+      if (!peer.send(mkPing(ts))) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pongWaiters.delete(ts);
+          resolve(false);
+        }, timeoutMs);
+        pongWaiters.set(ts, () => {
+          clearTimeout(timer);
+          pongWaiters.delete(ts);
+          resolve(true);
+        });
+      });
+    }
+
+    signaling.addEventListener('open', () => {
+      if (!admitted || !peer?.open) push({ connection: CONNECTION.CONNECTING });
+    });
+    signaling.addEventListener('joined', async (e) => {
       const peers = e.detail.peers || [];
-      if (peers.includes('host')) startOffer();
-      else push({ connection: CONNECTION.WAITING });
+      if (peers.includes('host')) {
+        hostAnnounced();
+      } else if (!(await probeLink())) {
+        push({ connection: CONNECTION.WAITING });
+      }
     });
     signaling.addEventListener('peer-join', (e) => {
-      if (e.detail.role === 'host') startOffer();
+      if (e.detail.role === 'host') hostAnnounced();
     });
-    signaling.addEventListener('peer-leave', () => {
+    signaling.addEventListener('peer-leave', async () => {
+      if (await probeLink()) return; // the desktop's socket left; our tether did not
       teardownPeer();
       push({ connection: CONNECTION.WAITING, agent: null });
     });
+
+    // The desktop turned up on the relay. If our channel still answers, that is
+    // the same desktop reconnecting its signaling socket — renegotiating would
+    // throw away a link that works. Only a link that has actually gone silent
+    // gets rebuilt.
+    async function hostAnnounced() {
+      if (await probeLink()) return;
+      startOffer();
+    }
     signaling.addEventListener('signal', (e) => peer && peer.accept(e.detail.data));
     signaling.addEventListener('relay-error', (e) => push({ error: e.detail.message }));
     signaling.addEventListener('close', () => {
-      if (state.connection === CONNECTION.TETHERED) push({ connection: CONNECTION.RECONNECTING });
+      // Signaling is only how the two ends *find* each other. Once the data
+      // channel is up the relay can drop, hibernate, or be closed for the night
+      // and the tether is completely unaffected — so losing it is not news, and
+      // reporting it as "reconnecting" was the single most misleading thing the
+      // status bead did. Only say so if the link itself is actually down.
+      if (state.connection === CONNECTION.TETHERED && !peer?.open) {
+        push({ connection: CONNECTION.RECONNECTING });
+      }
     });
+
+    // The host verified this device. This — and only this — is "tethered".
+    function onAdmitted() {
+      if (admitted) return; // READY can repeat across a re-handshake; the greeting shouldn't
+      admitted = true;
+      push({ connection: CONNECTION.TETHERED, error: null });
+      addMessage('system', `connected to ${state.agent || 'agent'}`, 'status');
+      updateNowPlaying();
+      flushOutbox(); // send anything composed while we were still linking
+    }
 
     // --- inbound link messages ----------------------------------------------
     function handleLink(msg) {
       switch (msg.t) {
         case LINK.HELLO: {
-          push({ connection: CONNECTION.TETHERED, agent: msg.agent || 'agent', error: null });
+          // HELLO is the host's challenge, not its blessing. Stay in the linking
+          // state and answer it; going green here meant a device that was about
+          // to be refused still showed "tethered" and swallowed everything the
+          // user typed into it.
+          push({ connection: CONNECTION.NEGOTIATING, agent: msg.agent || 'agent', error: null });
           sendSignedHello(msg.nonce); // authenticate this device to the host
           // Give the active tether a friendly auto-label from the desktop.
           const base = (msg.cwd || '').split(/[\\/]/).filter(Boolean).pop();
           if (state.activeTetherId) tethers.setAutoLabel(state.activeTetherId, base ? `${msg.agent} · ${base}` : msg.agent);
-          addMessage('system', `connected to ${msg.agent || 'agent'}`, 'status');
           updateNowPlaying();
-          flushOutbox(); // send anything composed while we were still linking
+          // A pre-READY desktop (proto 1) never sends a verdict, so take HELLO as
+          // one rather than leaving an older install stuck on "linking…".
+          if ((msg.proto || 1) < 2) onAdmitted();
           break;
         }
+        case LINK.READY:
+          onAdmitted();
+          break;
         case LINK.OUTPUT:
           if (!sawOutput) {
             sawOutput = true;
@@ -527,11 +621,29 @@ export class TetherQuery extends Query {
         case LINK.SPEAK:
           tts.speak(msg.text);
           break;
+        // Both ends probe the channel before believing the relay that it died,
+        // so both ends have to answer. The desktop asking and getting silence is
+        // the desktop concluding the phone is gone and rebuilding the tether.
+        case LINK.PING:
+          peer?.send(mkPong(msg.ts));
+          break;
+        case LINK.PONG:
+          pongWaiters.get(msg.ts)?.();
+          break;
         case LINK.STATUSLINE:
           push({ statusLine: msg.text || '' });
           break;
         case LINK.NOTICE:
-          showToast(msg.text, msg.level);
+          // A refusal isn't a toast — it doesn't go away on its own and the user
+          // has to do something on the desktop about it, so it takes over the
+          // connection state and stays on screen.
+          if (msg.code === NOTICE_CODE.UNPAIRED) {
+            admitted = false;
+            push({ connection: CONNECTION.UNPAIRED, error: msg.text, agent: null });
+            if (autoSpeakOn()) tts.speak(msg.text, { remember: false });
+          } else {
+            showToast(msg.text, msg.level);
+          }
           break;
         case LINK.MARKDOWN:
           markAssistantDone();

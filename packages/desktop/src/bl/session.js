@@ -20,10 +20,13 @@ import {
   LINK,
   LEVEL,
   COMMAND,
+  NOTICE_CODE,
   helloHost,
   notice,
   output,
+  ready as mkReady,
   status,
+  ping,
   pong,
   sessions as mkSessions,
   session as mkSession,
@@ -49,6 +52,10 @@ export class SessionQuery extends Query {
 
   async boot({ config, agent, signaling, peer: makePeer, frontend, registry }, { notify, engineFeed }) {
     const echo = (type, detail) => engineFeed.dispatchEvent(new CustomEvent(type, { detail }));
+    // bridle's own commentary, kept separate from `agent-output` so a supervisor
+    // can log what bridle did (refused a device, saved an upload) without
+    // mirroring the agent's entire stdout into the service journal.
+    const note = (text, level = 'info') => echo('bridle-note', { text, level });
 
     // MCP server: lets the agent drive the phone front-end (audio/images/ask/…).
     let mcp = null;
@@ -59,7 +66,7 @@ export class SessionQuery extends Query {
         agent.setMcp({ url: mcp.url });
         echo('mcp-up', { url: mcp.url });
       } catch (err) {
-        echo('agent-output', { text: `\n[bridle] MCP server failed to start: ${err.message}\n`, stream: 'stderr' });
+        note(`MCP server failed to start: ${err.message}`, 'error');
         mcp = null;
       }
     }
@@ -96,7 +103,6 @@ export class SessionQuery extends Query {
     let authed = false; // has the current peer proven its pinned device identity?
     let nonce = null; // per-connection challenge the guest must sign
     let preAuth = []; // messages that arrived before auth finished — replayed on admit
-    let pinnedFingerprint = await registry.getPin(config.room); // TOFU device pin
     let currentSessionId = null;
     const sessionTitles = new Map();
     const baseCleanups = [];
@@ -169,6 +175,8 @@ export class SessionQuery extends Query {
 
     // --- per-connection peer ------------------------------------------------
     function teardownPeer() {
+      for (const settle of pongWaiters.values()) settle();
+      pongWaiters.clear();
       for (const off of peerCleanups.splice(0)) off();
       frontend.detach();
       authed = false;
@@ -214,6 +222,9 @@ export class SessionQuery extends Query {
     // The guest passed the challenge: open the tether for real.
     async function admitGuest(guestName) {
       authed = true;
+      // Before anything else, so the phone can go green on a fact rather than on
+      // HELLO (which is only our challenge, and precedes the verdict).
+      peer.send(mkReady());
       push({ phase: PHASE.TETHERED, guest: guestName || 'phone' });
       if (outBuffer) {
         peer.send(output(outBuffer));
@@ -241,6 +252,11 @@ export class SessionQuery extends Query {
 
     // Verify the guest's signature over our nonce and enforce the device pin
     // (trust-on-first-use). Returns true only for the pinned device.
+    //
+    // The pin is read per handshake rather than cached for the session's life:
+    // `bridle unpair` writes the registry from another process, and a
+    // long-running daemon that had already read the old pin would keep refusing
+    // the phone the user just told it to accept.
     async function verifyGuest(msg) {
       if (!msg.pubKey || !msg.sig) return false;
       if (!(await verifySignature(msg.pubKey, msg.sig, config.room, nonce))) return false;
@@ -250,21 +266,51 @@ export class SessionQuery extends Query {
       } catch {
         return false;
       }
-      if (!pinnedFingerprint) {
-        pinnedFingerprint = fp;
+      const pinned = await registry.getPin(config.room).catch(() => null);
+      if (!pinned) {
         await registry.savePin(config.room, fp).catch(() => {});
         return true;
       }
-      return pinnedFingerprint === fp;
+      return pinned === fp;
     }
 
     // --- signaling <-> peer negotiation -------------------------------------
-    onBase(signaling, 'open', () => push({ phase: PHASE.WAITING }));
-    onBase(signaling, 'peer-join', () => {
+    // Relay events are news about the phone's *socket*, not about our tether —
+    // the data channel never goes through the relay. A hibernating room or a
+    // blip on the phone's signaling connection used to tear down a working peer
+    // here, interrupting a reply mid-sentence. PING/PONG is already in the
+    // protocol; ask the link before believing the relay about it.
+    const pongWaiters = new Map();
+    let pingSeq = 0;
+    function probeLink(timeoutMs = 2500) {
+      if (!authed || !peer) return Promise.resolve(false);
+      const ts = ++pingSeq;
+      if (!peer.send(ping(ts))) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pongWaiters.delete(ts);
+          resolve(false);
+        }, timeoutMs);
+        pongWaiters.set(ts, () => {
+          clearTimeout(timer);
+          pongWaiters.delete(ts);
+          resolve(true);
+        });
+      });
+    }
+
+    onBase(signaling, 'open', () => {
+      if (!authed) push({ phase: PHASE.WAITING });
+    });
+    onBase(signaling, 'peer-join', async () => {
+      // The same phone reconnecting its socket is not a new phone. Only rebuild
+      // when the channel we have has actually stopped answering.
+      if (await probeLink()) return;
       newPeer();
       push({ phase: PHASE.NEGOTIATING });
     });
-    onBase(signaling, 'peer-leave', () => {
+    onBase(signaling, 'peer-leave', async () => {
+      if (await probeLink()) return;
       teardownPeer();
       push({ phase: PHASE.PEER_LEFT, guest: null });
     });
@@ -292,10 +338,24 @@ export class SessionQuery extends Query {
         case LINK.HELLO: {
           const ok = await verifyGuest(msg);
           if (!ok) {
-            peer?.send(notice('This device isn’t paired with this tether. Re-scan the QR on the desktop to pair it.', LEVEL.ERROR));
-            echo('agent-output', { text: '\n[bridle] rejected an unrecognized device.\n', stream: 'stderr' });
-            teardownPeer();
-            push({ phase: PHASE.PEER_LEFT, guest: null });
+            // Tell the phone *why*, and how to fix it, before hanging up — and
+            // give the frame a moment to actually leave, since closing the peer
+            // in the same tick drops it and the phone is left staring at a
+            // tether that simply stopped.
+            peer?.send(
+              notice(
+                `This phone isn’t the one paired with this tether. On the desktop, run  bridle unpair ${config.name}  and reconnect to pair this device instead.`,
+                LEVEL.ERROR,
+                NOTICE_CODE.UNPAIRED,
+              ),
+            );
+            note(
+              `refused an unrecognized device on tether "${config.name}" — if this is your phone (reinstalled the app, cleared its data, or a new handset), run:  bridle unpair ${config.name}`,
+              'error',
+            );
+            push({ phase: PHASE.PEER_LEFT, guest: null, error: 'refused an unrecognized device' });
+            const rejected = peer;
+            setTimeout(() => peer === rejected && teardownPeer(), 250);
             return;
           }
           await admitGuest(msg.client);
@@ -364,12 +424,15 @@ export class SessionQuery extends Query {
           if (activeUpload && activeUpload.kind === 'attachment' && activeUpload.id === msg.id) {
             await activeUpload.writer.end();
             pendingAttachments.push(activeUpload.path);
-            echo('agent-output', { text: `\n[bridle] received attachment: ${activeUpload.path}\n`, stream: 'stderr' });
+            note(`received attachment: ${activeUpload.path}`);
             activeUpload = null;
           }
           break;
         case LINK.PING:
           peer?.send(pong(msg.ts));
+          break;
+        case LINK.PONG:
+          pongWaiters.get(msg.ts)?.();
           break;
         default:
           break;

@@ -1,4 +1,4 @@
-// Root composition. Injects the engine, subscribes to the TetherQuery via bones
+// Root composition. Injects the engine, subscribes to the TetherQuery via dodo's
 // `watch`, and translates component CustomEvents into ngin Action dispatches.
 // This is the only place that touches the engine — components stay pure.
 
@@ -89,11 +89,14 @@ export default function app(engine) {
     'remove-tether': (e) => go(new RemoveTetherAction(e.detail.id)),
   };
 
-  return alias(() => div({ className: 'shell' }, watch(tether$, view)).on(handlers));
+  return alias(() => div({ className: 'shell' }, watch(tether$, view, { placeholder: starting })).on(handlers));
 }
 
+// Rendered until the query's first notify — a beat, not a state the app can sit in.
+const starting = () => div({ className: 'screen' }, p({ className: 'hint' }, 'starting…'));
+
 function view(state) {
-  if (!state) return div({ className: 'screen' }, p({ className: 'hint' }, 'starting…'));
+  if (!state) return starting();
 
   const showHero = state.connection !== 'tethered' && state.messages.length === 0;
 
@@ -104,8 +107,10 @@ function view(state) {
     state.statusLine && div({ className: 'status-line' }, state.statusLine),
     state.ask && askPrompt(state.ask),
     micMeter(state),
-    controlBar(state),
+    // Above the controls, not below them: an error that explains why the
+    // composer won't deliver belongs on the same side of it as the transcript.
     state.error && div({ className: 'banner error' }, state.error),
+    controlBar(state),
     state.sheetOpen && settingsSheet(state),
     state.sessionsOpen && sessionsSheet(state),
     state.tethersOpen && tethersSheet(state),
@@ -117,6 +122,15 @@ function view(state) {
 }
 
 function hero(state) {
+  if (state.connection === 'unpaired') {
+    // The desktop is right there and answering — it just won't accept this
+    // handset. Nothing the phone can do fixes it, so say what does.
+    return div({ className: 'hero' },
+      p({ className: 'hero-title' }, '🔒 Not paired'),
+      p(['Your desktop answered, but this tether is paired with a ', strong('different phone'), '.']),
+      p({ className: 'hint' }, 'Each tether trusts exactly one handset, so a leaked room link alone can’t drive your agent. The desktop below says how to hand it to this one.'),
+    );
+  }
   if (state.connection === 'no-tether') {
     return div({ className: 'hero' },
       p({ className: 'hero-title' }, '🐴 bridle'),

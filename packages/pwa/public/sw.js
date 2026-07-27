@@ -5,8 +5,11 @@
 // navigations (so new deploys win), cache-first for hashed static assets.
 // Real-time traffic is P2P/WebSocket and never touches the SW.
 
-const CACHE = 'bridle-v2';
-const SHELL = ['/', '/app/', '/app/manifest.webmanifest', '/icon.svg'];
+const CACHE = 'bridle-v3';
+// The icon font is shell, not decoration: without it every button renders its
+// ligature name, so it is precached alongside the documents rather than left to
+// the runtime cache to pick up on a second visit.
+const SHELL = ['/', '/app/', '/app/manifest.webmanifest', '/icon.svg', '/fonts/material-symbols-rounded.woff2'];
 
 // The Whisper model (tens of MB) is fetched cross-origin from the HF hub. Its
 // weight files 302-redirect to a signed CDN URL, and Cache.put rejects a

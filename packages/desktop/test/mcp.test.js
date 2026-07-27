@@ -61,3 +61,41 @@ test('MCP server: notifications get no response, unknown method errors', async (
 
   s.stop();
 });
+
+test('the MCP endpoint is not reachable from a web page', async () => {
+  // It binds to loopback, which keeps it off the network but not away from any
+  // browser running on the same machine — and these tools drive the user's phone
+  // and approve the agent's tool calls.
+  const s = new McpServer({ controller: fakeController(), port: 0 });
+  s.start();
+  const base = `http://127.0.0.1:${s.server.port}`;
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  const json = { 'content-type': 'application/json' };
+
+  // The path carries a per-run secret, so the endpoint can't just be found.
+  expect(s.url).toContain('/mcp/');
+  expect((await fetch(`${base}/mcp`, { method: 'POST', headers: json, body })).status).toBe(404);
+  expect((await fetch(`${base}/mcp/${'0'.repeat(32)}`, { method: 'POST', headers: json, body })).status).toBe(404);
+
+  // Even holding the URL, a page can't use it: browsers stamp Origin on every
+  // cross-origin request, and MCP clients send none.
+  const fromPage = await fetch(s.url, { method: 'POST', headers: { ...json, origin: 'https://evil.example' }, body });
+  expect(fromPage.status).toBe(403);
+
+  // And text/plain — the one content type a page can send without a preflight
+  // this server would have to answer — is refused.
+  expect((await fetch(s.url, { method: 'POST', headers: { 'content-type': 'text/plain' }, body })).status).toBe(415);
+
+  // The agent's own call still works.
+  const ok = await fetch(s.url, { method: 'POST', headers: json, body }).then((r) => r.json());
+  expect(ok.result.tools.length).toBeGreaterThan(0);
+
+  s.stop();
+});
+
+test('two servers never share a token', () => {
+  const a = new McpServer({ controller: fakeController() });
+  const b = new McpServer({ controller: fakeController() });
+  expect(a.token).not.toBe(b.token);
+  expect(a.token.length).toBeGreaterThanOrEqual(32);
+});

@@ -14,14 +14,18 @@
 // String frames are JSON control messages. Binary frames are asset bytes (audio/
 // image/file) belonging to the asset announced by the most recent ASSET_BEGIN.
 
-export const PROTO_VERSION = 1;
+// 2 added READY: the host's explicit "this device is verified, the tether is
+// live". Before it, the phone went green on HELLO — which is only the host's
+// *challenge*, so a device that was about to be rejected still showed
+// "tethered" and accepted messages it could never deliver.
+export const PROTO_VERSION = 2;
 
 export const LINK = Object.freeze({
   // either direction
   HELLO: 'hello', // { t, role, proto, agent?, cwd?, client? }
   PING: 'ping', // { t, ts }
   PONG: 'pong', // { t, ts }
-  NOTICE: 'notice', // { t, level, text }
+  NOTICE: 'notice', // { t, level, text, code? }
 
   // guest (phone) -> host (desktop)
   TEXT: 'text', // { t, text }            transcribed/typed line -> agent stdin
@@ -36,6 +40,7 @@ export const LINK = Object.freeze({
   ATTACH_END: 'attach-end', // { t, id }                        saved to disk; referenced to the agent on the next message
 
   // host (desktop) -> guest (phone)
+  READY: 'ready', // { t }                 device verified; the tether is live
   OUTPUT: 'output', // { t, text, stream }   agent stdout/stderr chunk
   STATUS: 'status', // { t, state, code? }   agent lifecycle
   SESSIONS: 'sessions', // { t, sessions, currentId }  list of resumable sessions
@@ -60,6 +65,11 @@ export const AGENT_STATE = Object.freeze({
   ERROR: 'error',
 });
 export const LEVEL = Object.freeze({ INFO: 'info', WARN: 'warn', ERROR: 'error' });
+
+// Machine-readable reasons on a NOTICE, so the phone can act on one instead of
+// only showing its text. UNPAIRED is terminal: the device is not the pinned one,
+// and no amount of reconnecting will change that.
+export const NOTICE_CODE = Object.freeze({ UNPAIRED: 'unpaired' });
 
 // Host-affecting control commands the guest can issue (by voice or button).
 // Listening/TTS pause-resume are guest-LOCAL and never cross the wire.
@@ -97,7 +107,11 @@ export const helloGuest = ({ pubKey, sig } = {}) => ({
 
 export const ping = (ts) => ({ t: LINK.PING, ts });
 export const pong = (ts) => ({ t: LINK.PONG, ts });
-export const notice = (text, level = LEVEL.INFO) => ({ t: LINK.NOTICE, level, text });
+export const notice = (text, level = LEVEL.INFO, code) => ({ t: LINK.NOTICE, level, text, ...(code ? { code } : {}) });
+
+// Sent once the host has verified the guest's device. Everything the phone shows
+// as "tethered" hangs off this, not off HELLO.
+export const ready = () => ({ t: LINK.READY });
 
 export const text = (s, source) => ({ t: LINK.TEXT, text: s, source });
 export const command = (name, arg) => ({ t: LINK.COMMAND, name, arg });

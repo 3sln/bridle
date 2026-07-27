@@ -1,5 +1,5 @@
 import { test, expect } from 'bun:test';
-import { resolveAgent, genericProfile, normalizeCustomProfile } from '../src/agents.js';
+import { resolveAgent, genericProfile, normalizeCustomProfile, commandLabel } from '../src/agents.js';
 
 test('a custom oneshot profile builds turn args from templates', () => {
   const p = normalizeCustomProfile('mycli', {
@@ -62,4 +62,17 @@ test('generic profile streams stderr and lists no sessions', () => {
   const p = genericProfile(['foo']);
   expect(p.streamStderr).toBe(true);
   expect(p.listSessions()).toEqual([]);
+});
+
+test('a tethered command labels itself by leaf names, not full paths', () => {
+  // The label rides to the phone's header chip; an absolute path there pushes
+  // the connection state off the screen and reads as noise.
+  expect(commandLabel(['bun', '/Users/me/work/tools/agent-shim.js'])).toBe('bun agent-shim.js');
+  expect(commandLabel(['python3', '/opt/x/agent.py', '--verbose'])).toBe('python3 agent.py --verbose');
+  expect(commandLabel(['my-cli'])).toBe('my-cli');
+  expect(genericProfile(['bun', '/very/long/path/to/a/script.js']).label).toBe('bun script.js');
+  // Flags keep their dashes rather than being path-split.
+  expect(commandLabel(['cli', '--config=/etc/x.json'])).toBe('cli --config=/etc/x.json');
+  // And a genuinely long one is truncated rather than allowed to run away.
+  expect(commandLabel(['cli', 'a'.repeat(80)]).length).toBeLessThanOrEqual(40);
 });

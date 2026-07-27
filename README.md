@@ -17,7 +17,7 @@ keys, and tools already are.
 backend is just a relay.
 
 Built on the [3sln stack](https://github.com/3sln/stack): **ngin** (DI engine —
-providers/actions/queries), **dodo** (functional VDOM), **bones** (reactive glue).
+providers/actions/queries) and **dodo** (functional VDOM + reactive cells).
 Every platform capability is wrapped in an ngin **Provider**, so nothing is locked
 to Cloudflare, OpenAI, werift, or any one runtime.
 
@@ -47,9 +47,18 @@ administrator to make it permanent.
 ```sh
 bridle                            # your tethers + status (running/daemonized), and help
 bridle daemonize <name>          # register the persistent service (run as admin if blocked)
+bridle unpair <name>             # forget the paired phone, so a new one can pair
 bridle remove <name>             # stop + uninstall one
 bridle tether work claude --webview   # also pop a native QR window
 ```
+
+**Pairing.** The first phone to connect to a tether is pinned to it
+(trust-on-first-use — see the HELLO handshake), and every other device is
+refused: the room token alone can't drive your agent. Re-scanning the QR does
+*not* re-pair, because re-tethering keeps the same room and therefore the same
+pin. When the paired phone is gone — you reinstalled the app, cleared its data,
+or you have a new handset — run `bridle unpair <name>` and open the app on the
+phone you want. `bridle list` shows which tethers are paired.
 
 ## How it works
 
@@ -229,7 +238,7 @@ packages/
   protocol/   shared wire protocol (signaling + P2P link + ICE)  — zero-dep ESM
   worker/     Cloudflare Worker: signaling relay + PWA host       (platform-agnostic core + CF adapter)
   desktop/    bun CLI: agent spawn, Whisper, werift peer, QR, daemon
-  pwa/        ngin + dodo + bones app (providers / bl / ui)
+  pwa/        ngin + dodo app (providers / bl / ui)
 ```
 
 The signaling logic (`worker/src/signaling-room.js`) is transport-neutral; the

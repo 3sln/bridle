@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // Bridle desktop CLI dispatcher. Subcommands:
-//   tether <name> [agent] | daemonize | list | remove <name>
+//   tether <name> [agent] | daemonize | list | unpair <name> | remove <name>
 //   server (the shared supervisor) | daemon --setup <name> (legacy) | help
 //
 // All tethers are run by ONE shared `bridle server`; `tether` registers a tether
@@ -19,7 +19,7 @@ import {
   ServiceProvider,
   FrontendProvider,
 } from './providers.js';
-import { SetupsQuery, RemoveSetupAction } from './bl/setups.js';
+import { SetupsQuery, RemoveSetupAction, UnpairAction } from './bl/setups.js';
 import { getSetup, saveSetup, readSetups, envFileFor, acquireDaemonLock, releaseDaemonLock, serverRunning, stopServer } from './registry.js';
 import { installServerService, startBackgroundServer, migrateLegacyServices } from './service.js';
 import { runSession } from './run.js';
@@ -28,6 +28,16 @@ import { terminalQR, openWebviewQR } from './qr.js';
 import { ui } from './ui.js';
 
 const parsed = parseArgs();
+
+// Config resolution validates its inputs (the room token, above all). A bad flag
+// is a user error, not a crash — report it the way every other one is reported.
+function resolveConfig() {
+  try {
+    return loadConfig(parsed);
+  } catch (err) {
+    fail(err.message);
+  }
+}
 
 function buildEngine(config) {
   return new Engine({
@@ -51,6 +61,9 @@ switch (parsed.sub) {
   case 'rm':
     await cmdRemove(parsed.positional[0]);
     break;
+  case 'unpair':
+    await cmdUnpair(parsed.positional[0]);
+    break;
   case 'tether':
     await cmdPair();
     break;
@@ -73,7 +86,7 @@ switch (parsed.sub) {
 
 // --- tether: register the tether, ensure the server runs, show the QR --------
 async function cmdPair() {
-  const config = loadConfig(parsed);
+  const config = resolveConfig();
   if (!config.agent) {
     ui.needAgent(parsed.tetherName);
     process.exit(1);
@@ -187,7 +200,7 @@ async function cmdDaemon(name) {
 
 // --- list -------------------------------------------------------------------
 async function renderTethers() {
-  const engine = buildEngine(loadConfig(parsed));
+  const engine = buildEngine(resolveConfig());
   const handle = engine.query(new SetupsQuery());
   await new Promise((resolve) => {
     const sub = handle.subscribe((list) => {
@@ -214,13 +227,27 @@ async function cmdDefault() {
 // --- remove -----------------------------------------------------------------
 async function cmdRemove(name) {
   if (!name) fail('usage: bridle remove <name>');
-  const engine = buildEngine(loadConfig(parsed));
-  const feed = engine.dispatch(new RemoveSetupAction(name));
-  await new Promise((resolve, reject) => {
-    feed.addEventListener('removed', (e) => ui.removed(e.detail));
-    feed.addEventListener('complete', resolve);
-    feed.addEventListener('error', (e) => reject(e.error));
-  }).catch((err) => fail(err.message));
+  await runAction(new RemoveSetupAction(name), 'removed', (d) => ui.removed(d));
+}
+
+// --- unpair: forget the pinned phone so a new one can pair -------------------
+async function cmdUnpair(name) {
+  if (!name) fail('usage: bridle unpair <name>');
+  await runAction(new UnpairAction(name), 'unpaired', (d) => ui.unpaired(d));
+}
+
+// Dispatch one action, render the event it reports on, and exit. `feed.next`
+// rejects with what the action threw (or says it ended without emitting), so a
+// failure can't leave the CLI hanging on an event that will never arrive.
+async function runAction(action, event, render) {
+  const engine = buildEngine(resolveConfig());
+  const feed = engine.dispatch(action);
+  try {
+    render((await feed.next(event)).detail);
+  } catch (err) {
+    await engine.dispose();
+    fail(err.message);
+  }
   await engine.dispose();
   process.exit(0);
 }

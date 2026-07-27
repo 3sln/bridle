@@ -6,9 +6,22 @@
 //
 // We hand-roll the JSON-RPC subset MCP needs (initialize, tools/list,
 // tools/call, ping) and answer with application/json — no SSE required for
-// request/response tools. Bound to 127.0.0.1 only.
+// request/response tools.
+//
+// Binding to 127.0.0.1 keeps it off the network but does NOT make it private:
+// any page in any browser on this machine can POST to a loopback port. These
+// tools ask the user questions on their phone and approve the agent's tool
+// calls, so a web page must never be able to reach them. Three gates, per the
+// MCP local-server guidance:
+//
+//   * an unguessable per-run token in the path — the agent gets it via
+//     --mcp-config, an attacker would have to guess 128 bits;
+//   * no `Origin` header — every cross-origin browser request carries one, and
+//     no CLI MCP client sends one;
+//   * `content-type: application/json` — the one content type that cannot be
+//     sent cross-origin without a preflight the server never answers.
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,12 +32,14 @@ export class McpServer {
     this.controller = controller;
     this.port = port;
     this.sessionId = crypto.randomUUID();
+    this.token = crypto.randomUUID().replace(/-/g, '');
+    this.path = `/mcp/${this.token}`;
     this.server = null;
     this.tools = buildTools(controller);
   }
 
   get url() {
-    return this.server ? `http://127.0.0.1:${this.server.port}/mcp` : null;
+    return this.server ? `http://127.0.0.1:${this.server.port}${this.path}` : null;
   }
 
   start() {
@@ -43,9 +58,19 @@ export class McpServer {
 
   async #fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname !== '/mcp') return new Response('not found', { status: 404 });
+    // Constant-time-ish and, more importantly, indistinguishable: a wrong token
+    // and a wrong path both look like nothing is here.
+    if (url.pathname !== this.path) return new Response('not found', { status: 404 });
+    // A browser stamps Origin on every cross-origin request; MCP clients don't
+    // send one at all. Anything with one is a page, and no page should be here.
+    if (req.headers.get('origin')) return new Response('forbidden', { status: 403 });
     if (req.method === 'GET') return new Response(null, { status: 405 }); // no server-initiated SSE
     if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
+    // Rejecting anything else costs a correct client nothing and takes away the
+    // simple-request (text/plain, no preflight) path a page would have to use.
+    if (!/^application\/json\b/i.test(req.headers.get('content-type') || '')) {
+      return new Response('expected application/json', { status: 415 });
+    }
 
     let msg;
     try {
@@ -224,7 +249,9 @@ function summarizeFormResult(result) {
   }
   const path = join(tmpdir(), `bridle-form-${process.pid}-${++formSeq}.json`);
   try {
-    writeFileSync(path, JSON.stringify(result, null, 2));
+    // Whatever the user typed into the form — tmpdir is world-readable.
+    writeFileSync(path, JSON.stringify(result, null, 2), { mode: 0o600 });
+    chmodSync(path, 0o600); // `mode` only applies on creation
   } catch {
     /* fall back to inline (best effort) */
   }

@@ -85,3 +85,34 @@ test('rolls the per-IP daily counter over at a UTC day boundary', () => {
   expect(r.ok).toBe(true); // yesterday's 25 don't count against today
   expect(r.state.ipCounts['1.2.3.4']).toBe(1);
 });
+
+test('the per-IP table stays inside a Durable Object value', () => {
+  // The whole state is one DO value, capped at 128 KiB. Unbounded growth here
+  // meant `put` eventually threw, `reserve()` failed, and the worker's catch
+  // quietly answered "budget-unavailable" — TURN off for everyone until UTC
+  // midnight, and cheap to trigger on purpose.
+  const knobs = { maxPerMinute: 1e9, maxPerIpPerDay: 1e9, monthlyGbBudget: 1e9 };
+  let state = {};
+  for (let i = 0; i < 5000; i++) {
+    state = decide(state, { ip: `2001:db8::${i.toString(16)}`, now: T0, knobs }).state;
+  }
+  const tracked = Object.keys(state.ipCounts).length;
+  expect(tracked).toBeLessThanOrEqual(1000);
+  // Every grant is still counted globally, whether or not its IP is tracked.
+  expect(state.grants).toBe(5000);
+  expect(JSON.stringify(state).length).toBeLessThan(120 * 1024);
+});
+
+test('a flood of one-shot IPs cannot evict a repeat caller from its cap', () => {
+  const knobs = { maxPerMinute: 1e9, maxPerIpPerDay: 3, monthlyGbBudget: 1e9 };
+  let state = {};
+  // A repeat caller uses up its allowance.
+  for (let i = 0; i < 3; i++) state = decide(state, { ip: 'abuser', now: T0, knobs }).state;
+  // Then the table is flooded with fresh IPs — the single-grant entries are the
+  // ones that get forgotten, not the caller the cap exists for.
+  for (let i = 0; i < 4000; i++) {
+    state = decide(state, { ip: `10.0.${(i >> 8) & 255}.${i & 255}`, now: T0, knobs }).state;
+  }
+  expect(state.ipCounts.abuser).toBe(3);
+  expect(decide(state, { ip: 'abuser', now: T0, knobs }).reason).toBe('ip-quota');
+});

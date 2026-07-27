@@ -275,11 +275,22 @@ const BY_ALIAS = (() => {
 export const DEFAULT_AGENT = 'claude';
 export const listProfiles = () => Object.values(PROFILES);
 
+// A tethered command is often an absolute path, and the label rides all the way
+// to the phone's header chip and its "connected to …" line. `bun
+// /Users/me/work/tools/agent-shim.js` there is unreadable and shoves the
+// connection state off the screen — the leaf names say the same thing.
+export function commandLabel(command, max = 40) {
+  const label = command
+    .map((arg) => (arg.startsWith('-') ? arg : arg.split(/[\\/]/).filter(Boolean).pop() || arg))
+    .join(' ');
+  return label.length > max ? `${label.slice(0, max - 1)}…` : label;
+}
+
 /** Generic persistent-pipe profile for an arbitrary command. */
 export function genericProfile(command) {
   return {
     id: 'custom',
-    label: command.join(' '),
+    label: commandLabel(command),
     command,
     mode: 'pipe',
     tier: 'baseline',

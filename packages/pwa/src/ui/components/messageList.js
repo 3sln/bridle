@@ -5,6 +5,7 @@
 // on each spoken message plays it on demand.
 import { dd } from '../../runtime.js';
 import { icon } from '../icon.js';
+import { renderMarkdown, markdownToSpeech } from '../../lib/markdown.js';
 
 const { alias, ul, li, span, div, a, img, h, button } = dd;
 
@@ -37,7 +38,13 @@ export default alias(function (state) {
 
 function renderMessage(m, manualSpeak, fire) {
   const speakable = manualSpeak && SPOKEN_ROLES.has(m.role) && textOf(m);
-  return li({ className: `msg ${m.role} ${m.kind || ''} ${m.queued ? 'queued' : ''}`.trim() },
+  // `k-` prefix: a message kind is app data, and dropping it into the class list
+  // raw put it in the same namespace as the layout's own classes. `kind:
+  // 'status'` collided with the header's `.status`, so every system line — "new
+  // conversation", "connected to claude" — silently inherited the header's
+  // sticky positioning, blur, border and 56px min-height, and sat pinned over
+  // the transcript as a phantom banner.
+  return li({ className: `msg ${m.role} ${m.kind ? `k-${m.kind}` : ''} ${m.queued ? 'queued' : ''}`.trim() },
     m.kind === 'command' && span({ className: 'tag' }, 'cmd'),
     m.queued && span({ className: 'tag queued-tag' }, 'queued'),
     body(m),
@@ -49,7 +56,9 @@ function renderMessage(m, manualSpeak, fire) {
 }
 
 const SPOKEN_ROLES = new Set(['assistant', 'user']);
-const textOf = (m) => (!m.kind || m.kind === 'markdown' || m.kind === 'answer' || m.kind === 'command') ? (m.content || '') : (m.content || '');
+// What the speaker button hands to TTS. A markdown card is stripped to prose
+// first — this button matters most when the user is not looking at the screen.
+const textOf = (m) => (m.kind === 'markdown' ? markdownToSpeech(m.content) : m.content || '');
 
 // The time + delivery receipt that sits inside the bubble, bottom-right. System
 // status pills stay bare.
@@ -90,7 +99,7 @@ function body(m) {
     case 'markdown':
       return div({ className: 'bubble md' },
         m.title && span({ className: 'md-title' }, m.title),
-        span({ className: 'md-body' }, m.content),
+        div({ className: 'md-body' }, renderMarkdown(m.content)),
         meta(m),
       );
     default:

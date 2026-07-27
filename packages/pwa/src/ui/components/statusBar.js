@@ -13,6 +13,7 @@ const LABELS = {
   negotiating: 'linking…',
   tethered: 'tethered',
   reconnecting: 'reconnecting…',
+  unpaired: 'not paired',
   error: 'error',
 };
 
