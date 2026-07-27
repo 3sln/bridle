@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
-  "description": "Bridle PWA: the phone end of the tether. ngin + dodo + bones, Whisper STT (via desktop) + browser TTS.",
+  "description": "Bridle PWA: the phone end of the tether. ngin + dodo, Whisper STT (via desktop) + browser TTS.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -11,9 +11,8 @@
     "test:browser": "wtr --config web-test-runner.config.mjs"
   },
   "dependencies": {
-    "@3sln/bones": "^0.0.5",
-    "@3sln/dodo": "^0.0.9",
-    "@3sln/ngin": "^0.0.3",
+    "@3sln/dodo": "^0.0.10",
+    "@3sln/ngin": "^0.0.4",
     "@bridle/protocol": "workspace:*",
     "@huggingface/transformers": "^3.0.0",
     "@ricky0123/vad-web": "^0.0.30",

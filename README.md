@@ -17,7 +17,7 @@ keys, and tools already are.
 backend is just a relay.
 
 Built on the [3sln stack](https://github.com/3sln/stack): **ngin** (DI engine —
-providers/actions/queries), **dodo** (functional VDOM), **bones** (reactive glue).
+providers/actions/queries) and **dodo** (functional VDOM + reactive cells).
 Every platform capability is wrapped in an ngin **Provider**, so nothing is locked
 to Cloudflare, OpenAI, werift, or any one runtime.
 
@@ -229,7 +229,7 @@ packages/
   protocol/   shared wire protocol (signaling + P2P link + ICE)  — zero-dep ESM
   worker/     Cloudflare Worker: signaling relay + PWA host       (platform-agnostic core + CF adapter)
   desktop/    bun CLI: agent spawn, Whisper, werift peer, QR, daemon
-  pwa/        ngin + dodo + bones app (providers / bl / ui)
+  pwa/        ngin + dodo app (providers / bl / ui)
 ```
 
 The signaling logic (`worker/src/signaling-room.js`) is transport-neutral; the

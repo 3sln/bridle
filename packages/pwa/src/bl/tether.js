@@ -1,6 +1,6 @@
 // The phone's brain. One long-lived ngin Query boots the connection (guest /
 // offerer), wires mic + TTS, drives conversation mode, and `notify`s a single
-// UI state snapshot the composition renders via bones `watch`.
+// UI state snapshot the composition renders via dodo `watch`.
 //
 // User intents arrive as dispatched Actions that emit on the engineFeed; the
 // query (which holds the live peer/mic/tts) reacts. This is ngin's choreographer

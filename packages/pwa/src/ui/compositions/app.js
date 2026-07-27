@@ -1,4 +1,4 @@
-// Root composition. Injects the engine, subscribes to the TetherQuery via bones
+// Root composition. Injects the engine, subscribes to the TetherQuery via dodo's
 // `watch`, and translates component CustomEvents into ngin Action dispatches.
 // This is the only place that touches the engine — components stay pure.
 
@@ -89,11 +89,14 @@ export default function app(engine) {
     'remove-tether': (e) => go(new RemoveTetherAction(e.detail.id)),
   };
 
-  return alias(() => div({ className: 'shell' }, watch(tether$, view)).on(handlers));
+  return alias(() => div({ className: 'shell' }, watch(tether$, view, { placeholder: starting })).on(handlers));
 }
 
+// Rendered until the query's first notify — a beat, not a state the app can sit in.
+const starting = () => div({ className: 'screen' }, p({ className: 'hint' }, 'starting…'));
+
 function view(state) {
-  if (!state) return div({ className: 'screen' }, p({ className: 'hint' }, 'starting…'));
+  if (!state) return starting();
 
   const showHero = state.connection !== 'tethered' && state.messages.length === 0;
 
