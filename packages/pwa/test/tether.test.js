@@ -246,3 +246,62 @@ test('text composed before admission is held, then flushed once verified', async
   sub.unsubscribe();
   await engine.dispose();
 });
+
+test('relay news about the desktop’s socket does not tear down a live tether', async () => {
+  const { engine, sub, signaling, peer, now, settle } = await boot();
+  peer.emit('message', { msg: link.helloHost('claude', '/w', 'n') });
+  peer.emit('message', { msg: link.ready() });
+  await settle();
+  expect(now().connection).toBe(CONNECTION.TETHERED);
+
+  // Answer the probe the way the desktop does, so the link proves itself alive.
+  peer.addEventListener('__ping', () => {});
+  const answerPings = () => {
+    for (const m of peer.sent.filter((f) => f.t === link.LINK.PING)) {
+      peer.emit('message', { msg: link.pong(m.ts) });
+    }
+    peer.sent.length = 0;
+  };
+
+  // The relay drops the desktop's socket (hibernation, a blip). Our data channel
+  // never went through the relay — it is untouched.
+  const leave = new Promise((r) => setTimeout(r, 0));
+  signaling.emit('peer-leave', { role: 'host' });
+  await leave;
+  answerPings();
+  await settle();
+  await settle();
+  expect(now().connection).toBe(CONNECTION.TETHERED);
+
+  // Its socket comes back and the relay announces an arrival. Renegotiating
+  // here would throw away a working channel to rebuild the same one.
+  const before = peer;
+  signaling.emit('peer-join', { role: 'host' });
+  await new Promise((r) => setTimeout(r, 0));
+  answerPings();
+  await settle();
+  await settle();
+  expect(now().connection).toBe(CONNECTION.TETHERED);
+  expect(peer).toBe(before); // same channel, never rebuilt
+
+  sub.unsubscribe();
+  await engine.dispose();
+});
+
+test('a link that stops answering is rebuilt', async () => {
+  const { engine, sub, signaling, peer, now, settle } = await boot();
+  peer.emit('message', { msg: link.helloHost('claude', '/w', 'n') });
+  peer.emit('message', { msg: link.ready() });
+  await settle();
+
+  // No pong this time: the desktop really is gone.
+  signaling.emit('peer-leave', { role: 'host' });
+  for (let i = 0; i < 40; i++) {
+    if (now().connection === CONNECTION.WAITING) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  expect(now().connection).toBe(CONNECTION.WAITING);
+
+  sub.unsubscribe();
+  await engine.dispose();
+}, 15000);

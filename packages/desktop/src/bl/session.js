@@ -26,6 +26,7 @@ import {
   output,
   ready as mkReady,
   status,
+  ping,
   pong,
   sessions as mkSessions,
   session as mkSession,
@@ -174,6 +175,8 @@ export class SessionQuery extends Query {
 
     // --- per-connection peer ------------------------------------------------
     function teardownPeer() {
+      for (const settle of pongWaiters.values()) settle();
+      pongWaiters.clear();
       for (const off of peerCleanups.splice(0)) off();
       frontend.detach();
       authed = false;
@@ -272,12 +275,42 @@ export class SessionQuery extends Query {
     }
 
     // --- signaling <-> peer negotiation -------------------------------------
-    onBase(signaling, 'open', () => push({ phase: PHASE.WAITING }));
-    onBase(signaling, 'peer-join', () => {
+    // Relay events are news about the phone's *socket*, not about our tether —
+    // the data channel never goes through the relay. A hibernating room or a
+    // blip on the phone's signaling connection used to tear down a working peer
+    // here, interrupting a reply mid-sentence. PING/PONG is already in the
+    // protocol; ask the link before believing the relay about it.
+    const pongWaiters = new Map();
+    let pingSeq = 0;
+    function probeLink(timeoutMs = 2500) {
+      if (!authed || !peer) return Promise.resolve(false);
+      const ts = ++pingSeq;
+      if (!peer.send(ping(ts))) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pongWaiters.delete(ts);
+          resolve(false);
+        }, timeoutMs);
+        pongWaiters.set(ts, () => {
+          clearTimeout(timer);
+          pongWaiters.delete(ts);
+          resolve(true);
+        });
+      });
+    }
+
+    onBase(signaling, 'open', () => {
+      if (!authed) push({ phase: PHASE.WAITING });
+    });
+    onBase(signaling, 'peer-join', async () => {
+      // The same phone reconnecting its socket is not a new phone. Only rebuild
+      // when the channel we have has actually stopped answering.
+      if (await probeLink()) return;
       newPeer();
       push({ phase: PHASE.NEGOTIATING });
     });
-    onBase(signaling, 'peer-leave', () => {
+    onBase(signaling, 'peer-leave', async () => {
+      if (await probeLink()) return;
       teardownPeer();
       push({ phase: PHASE.PEER_LEFT, guest: null });
     });
@@ -397,6 +430,9 @@ export class SessionQuery extends Query {
           break;
         case LINK.PING:
           peer?.send(pong(msg.ts));
+          break;
+        case LINK.PONG:
+          pongWaiters.get(msg.ts)?.();
           break;
         default:
           break;

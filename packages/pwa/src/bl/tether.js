@@ -22,6 +22,8 @@ import {
   formFileEnd as mkFormFileEnd,
   attachBegin as mkAttachBegin,
   attachEnd as mkAttachEnd,
+  ping as mkPing,
+  pong as mkPong,
 } from '@bridle/protocol/link';
 import { offer as mkOffer } from '@bridle/protocol/signaling';
 import { parse as parseCommand, CMD } from './commands.js';
@@ -374,6 +376,8 @@ export class TetherQuery extends Query {
 
     function teardownPeer() {
       admitted = false;
+      for (const settle of pongWaiters.values()) settle();
+      pongWaiters.clear();
       resetTurn();
       if (peer) {
         try {
@@ -472,19 +476,62 @@ export class TetherQuery extends Query {
       else notifyNow();
     });
 
-    signaling.addEventListener('open', () => push({ connection: CONNECTION.CONNECTING }));
-    signaling.addEventListener('joined', (e) => {
+    // Everything the relay says about the *other end's socket* is second-hand
+    // news about our link. The relay drops, hibernates, or loses the desktop's
+    // socket for a moment and announces a departure and an arrival — while the
+    // P2P channel between us carries on, untouched, because it never went
+    // through the relay in the first place. Acting on that news tore down a
+    // working tether and made the user watch it rebuild.
+    //
+    // So: ask the link itself. PING/PONG is already in the protocol and the
+    // desktop already answers it. If it answers, there is nothing to do.
+    const pongWaiters = new Map();
+    let pingSeq = 0;
+    function probeLink(timeoutMs = 2500) {
+      if (!admitted || !peer?.open) return Promise.resolve(false);
+      const ts = ++pingSeq;
+      if (!peer.send(mkPing(ts))) return Promise.resolve(false);
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          pongWaiters.delete(ts);
+          resolve(false);
+        }, timeoutMs);
+        pongWaiters.set(ts, () => {
+          clearTimeout(timer);
+          pongWaiters.delete(ts);
+          resolve(true);
+        });
+      });
+    }
+
+    signaling.addEventListener('open', () => {
+      if (!admitted || !peer?.open) push({ connection: CONNECTION.CONNECTING });
+    });
+    signaling.addEventListener('joined', async (e) => {
       const peers = e.detail.peers || [];
-      if (peers.includes('host')) startOffer();
-      else push({ connection: CONNECTION.WAITING });
+      if (peers.includes('host')) {
+        hostAnnounced();
+      } else if (!(await probeLink())) {
+        push({ connection: CONNECTION.WAITING });
+      }
     });
     signaling.addEventListener('peer-join', (e) => {
-      if (e.detail.role === 'host') startOffer();
+      if (e.detail.role === 'host') hostAnnounced();
     });
-    signaling.addEventListener('peer-leave', () => {
+    signaling.addEventListener('peer-leave', async () => {
+      if (await probeLink()) return; // the desktop's socket left; our tether did not
       teardownPeer();
       push({ connection: CONNECTION.WAITING, agent: null });
     });
+
+    // The desktop turned up on the relay. If our channel still answers, that is
+    // the same desktop reconnecting its signaling socket — renegotiating would
+    // throw away a link that works. Only a link that has actually gone silent
+    // gets rebuilt.
+    async function hostAnnounced() {
+      if (await probeLink()) return;
+      startOffer();
+    }
     signaling.addEventListener('signal', (e) => peer && peer.accept(e.detail.data));
     signaling.addEventListener('relay-error', (e) => push({ error: e.detail.message }));
     signaling.addEventListener('close', () => {
@@ -573,6 +620,15 @@ export class TetherQuery extends Query {
         // --- front-end control (agent MCP tools) ---
         case LINK.SPEAK:
           tts.speak(msg.text);
+          break;
+        // Both ends probe the channel before believing the relay that it died,
+        // so both ends have to answer. The desktop asking and getting silence is
+        // the desktop concluding the phone is gone and rebuilding the tether.
+        case LINK.PING:
+          peer?.send(mkPong(msg.ts));
+          break;
+        case LINK.PONG:
+          pongWaiters.get(msg.ts)?.();
           break;
         case LINK.STATUSLINE:
           push({ statusLine: msg.text || '' });
